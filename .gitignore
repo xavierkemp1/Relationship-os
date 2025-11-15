@@ -1,0 +1,48 @@
+# =========================
+# Relationship OS (Tauri + React)
+# =========================
+
+# Node & frontend
+node_modules/
+dist/
+.pnpm-store/
+.vite/
+vite.config.ts.timestamp-*
+*.log
+.env
+.env.*
+*.local
+
+# Rust / Tauri
+/src-tauri/target/
+src-tauri/Cargo.lock
+src-tauri/tauri-build/
+src-tauri/gen/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OneDrive sync artifacts (since you’re in OneDrive)
+~$*
+*.tmp
+*.lnk
+
+# Optional build artifacts
+*.exe
+*.app
+*.msi
+*.dmg
+*.zip
+*.tar.gz
+
+# Voice note recordings (you can re-enable later if you want them in repo)
+*.webm
