@@ -283,10 +283,13 @@ export default function Person() {
   };
 
   const startRecording = async () => {
+    console.log("[recording] startRecording called");
     if (!id || status !== "idle") return;
     try {
       setError(null);
       const recorder = await recordVoice(async (filePath, duration) => {
+        console.log("[recording] calling saveRecording", { filePath, duration });
+        setStatus("saving");
         try {
           const db = await getDb();
           const interactionId = uuid();
@@ -302,8 +305,9 @@ export default function Person() {
             [uuid(), interactionId, filePath, duration]
           );
           await load();
+          console.log("[recording] saveRecording success", { interactionId, filePath });
         } catch (dbErr: any) {
-          console.error("Save interaction failed", dbErr);
+          console.error("[recording] saveRecording error", dbErr);
           setError(dbErr?.message ?? "Failed to save note");
         } finally {
           recRef.current = null;
@@ -313,16 +317,25 @@ export default function Person() {
       recRef.current = recorder;
       setStatus("recording");
     } catch (e: any) {
-      console.error("Record failed", e);
+      console.error("[recording] startRecording failed", e);
       setStatus("idle");
       setError(e?.message ?? "Unable to start recording");
     }
   };
 
   const stopRecording = () => {
-    if (!recRef.current) return;
+    console.log("[recording] stopRecording called");
+    if (!recRef.current) {
+      console.warn("[recording] stopRecording called without active recorder");
+      return;
+    }
     setStatus("saving");
-    recRef.current.stop();
+    try {
+      recRef.current.stop();
+    } catch (err) {
+      console.error("[recording] failed to stop recorder", err);
+      setStatus("idle");
+    }
   };
 
   const addNote = async () => {
