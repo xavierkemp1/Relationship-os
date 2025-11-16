@@ -38,7 +38,7 @@ export async function recordVoice(onStop:(filePath:string, duration:number)=>voi
       await writeFile(path, arr, { baseDir: BaseDirectory.AppData });
 
       const duration = Math.round((Date.now() - startedAt) / 1000);
-      onStop(path, duration);
+      await onStop(path, duration);
     } finally {
       releaseStream();
     }
