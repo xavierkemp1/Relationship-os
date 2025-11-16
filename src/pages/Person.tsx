@@ -1,18 +1,23 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
 import { recordVoice } from "../lib/audio";
 
 type PersonRow = { id: string; name: string; context?: string };
 type InteractionRow = { id: string; occurred_at: string };
+type PersonNoteRow = { id: string; body: string; created_at: string; updated_at: string | null };
 
 export default function Person() {
   const { id } = useParams();
   const [person, setPerson] = useState<PersonRow | null>(null);
   const [interactions, setInteractions] = useState<InteractionRow[]>([]);
-  const [rec, setRec] = useState<MediaRecorder | null>(null);
-  const [status, setStatus] = useState<"idle" | "recording">("idle");
+  const [notes, setNotes] = useState<PersonNoteRow[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const recRef = useRef<MediaRecorder | null>(null);
+  const [status, setStatus] = useState<"idle" | "recording" | "saving">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -25,8 +30,13 @@ export default function Person() {
         "SELECT * FROM interactions WHERE person_id=? ORDER BY occurred_at DESC",
         [id]
       );
+      const personNotes = await db.select<PersonNoteRow[]>(
+        "SELECT * FROM person_notes WHERE person_id=? ORDER BY created_at DESC",
+        [id]
+      );
       setPerson(p ?? null);
       setInteractions(ints);
+      setNotes(personNotes);
     } catch (e: any) {
       console.error("Load person failed", e);
       setError(e?.message ?? "Failed to load person");
@@ -39,12 +49,16 @@ export default function Person() {
 
   useEffect(() => {
     return () => {
-      rec?.stop();
+      if (recRef.current) {
+        try {
+          recRef.current.stop();
+        } catch {}
+      }
     };
-  }, [rec]);
+  }, []);
 
   const startRecording = async () => {
-    if (!id) return;
+    if (!id || status !== "idle") return;
     try {
       setError(null);
       const recorder = await recordVoice(async (filePath, duration) => {
@@ -64,11 +78,11 @@ export default function Person() {
           console.error("Save interaction failed", dbErr);
           setError(dbErr?.message ?? "Failed to save note");
         } finally {
-          setRec(null);
+          recRef.current = null;
           setStatus("idle");
         }
       });
-      setRec(recorder);
+      recRef.current = recorder;
       setStatus("recording");
     } catch (e: any) {
       console.error("Record failed", e);
@@ -78,7 +92,66 @@ export default function Person() {
   };
 
   const stopRecording = () => {
-    rec?.stop();
+    if (!recRef.current) return;
+    setStatus("saving");
+    recRef.current.stop();
+  };
+
+  const addNote = async () => {
+    if (!id) return;
+    const body = noteDraft.trim();
+    if (!body) return;
+    try {
+      setError(null);
+      const db = await getDb();
+      await db.execute("INSERT INTO person_notes (id, person_id, body) VALUES (?,?,?)", [uuid(), id, body]);
+      setNoteDraft("");
+      await load();
+    } catch (e: any) {
+      console.error("Add note failed", e);
+      setError(e?.message ?? "Failed to add note");
+    }
+  };
+
+  const beginEdit = (note: PersonNoteRow) => {
+    setEditingId(note.id);
+    setEditingText(note.body);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !id) return;
+    const body = editingText.trim();
+    if (!body) return;
+    try {
+      setError(null);
+      const db = await getDb();
+      await db.execute("UPDATE person_notes SET body=?, updated_at=datetime('now') WHERE id=?", [body, editingId]);
+      cancelEdit();
+      await load();
+    } catch (e: any) {
+      console.error("Update note failed", e);
+      setError(e?.message ?? "Failed to update note");
+    }
+  };
+
+  const deleteNote = async (noteId: string) => {
+    try {
+      setError(null);
+      const db = await getDb();
+      await db.execute("DELETE FROM person_notes WHERE id=?", [noteId]);
+      if (editingId === noteId) {
+        cancelEdit();
+      }
+      await load();
+    } catch (e: any) {
+      console.error("Delete note failed", e);
+      setError(e?.message ?? "Failed to delete note");
+    }
   };
 
   return (
@@ -91,8 +164,10 @@ export default function Person() {
       <div className="mt-4 flex gap-3">
         {status === "idle" ? (
           <button onClick={startRecording} className="px-4 py-2 rounded bg-black text-white">Record quick note</button>
-        ) : (
+        ) : status === "recording" ? (
           <button onClick={stopRecording} className="px-4 py-2 rounded bg-red-600 text-white">Stop</button>
+        ) : (
+          <button disabled className="px-4 py-2 rounded bg-gray-300 text-gray-600 cursor-not-allowed">Saving…</button>
         )}
       </div>
 
@@ -106,6 +181,72 @@ export default function Person() {
             {/* later: summary, mood, next step */}
           </li>
         ))}
+      </ul>
+
+      <h3 className="text-xl font-semibold mt-8 mb-2">Notes</h3>
+      <div className="space-y-3">
+        <textarea
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+          placeholder="Jot down a thought about this person…"
+          className="w-full border rounded p-3"
+        />
+        <div className="flex justify-end">
+          <button
+            onClick={addNote}
+            className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+            disabled={!noteDraft.trim()}
+          >
+            Save note
+          </button>
+        </div>
+      </div>
+
+      <ul className="mt-4 space-y-3">
+        {notes.map((note) => (
+          <li key={note.id} className="border rounded p-3">
+            {editingId === note.id ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editingText}
+                  onChange={(e) => setEditingText(e.target.value)}
+                  className="w-full border rounded p-2"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveEdit}
+                    className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-50"
+                    disabled={!editingText.trim()}
+                  >
+                    Save
+                  </button>
+                  <button onClick={cancelEdit} className="px-3 py-1 rounded bg-gray-200">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="whitespace-pre-wrap text-gray-800">{note.body}</p>
+                <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                  <span>Added {note.created_at}</span>
+                  {note.updated_at && <span>Updated {note.updated_at}</span>}
+                </div>
+                <div className="mt-3 flex gap-3">
+                  <button onClick={() => beginEdit(note)} className="text-blue-600 text-sm">
+                    Edit
+                  </button>
+                  <button onClick={() => deleteNote(note.id)} className="text-red-600 text-sm">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+        {notes.length === 0 && (
+          <li className="text-sm text-gray-500">No notes yet. Use the box above to add one.</li>
+        )}
       </ul>
     </div>
   );

@@ -48,6 +48,15 @@ export const getDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(interaction_id) REFERENCES interactions(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS person_notes (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME,
+      FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE
+    );
   `);
 
   return db;
