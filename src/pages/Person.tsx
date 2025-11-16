@@ -1,5 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { appDataDir, join } from "@tauri-apps/api/path";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
 import { recordVoice } from "../lib/audio";
@@ -7,11 +9,19 @@ import { recordVoice } from "../lib/audio";
 type PersonRow = { id: string; name: string; context?: string };
 type InteractionRow = { id: string; occurred_at: string };
 type PersonNoteRow = { id: string; body: string; created_at: string; updated_at: string | null };
+type VoiceNoteRow = {
+  id: string;
+  interaction_id: string;
+  filepath: string;
+  duration_seconds: number | null;
+};
+type VoiceNote = VoiceNoteRow & { src: string };
+type Interaction = InteractionRow & { voiceNotes: VoiceNote[] };
 
 export default function Person() {
   const { id } = useParams();
   const [person, setPerson] = useState<PersonRow | null>(null);
-  const [interactions, setInteractions] = useState<InteractionRow[]>([]);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [notes, setNotes] = useState<PersonNoteRow[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -30,12 +40,35 @@ export default function Person() {
         "SELECT * FROM interactions WHERE person_id=? ORDER BY occurred_at DESC",
         [id]
       );
+      const voiceRows = await db.select<VoiceNoteRow[]>(
+        `SELECT vn.id, vn.interaction_id, vn.filepath, vn.duration_seconds
+         FROM voice_notes vn
+         INNER JOIN interactions i ON vn.interaction_id = i.id
+         WHERE i.person_id=?`,
+        [id]
+      );
+      const dir = await appDataDir();
+      const notesWithSrc = await Promise.all(
+        voiceRows.map(async (note) => {
+          const fullPath = await join(dir, note.filepath);
+          const enriched: VoiceNote = { ...note, src: convertFileSrc(fullPath) };
+          return enriched;
+        })
+      );
+      const noteMap = new Map<string, VoiceNote[]>();
+      notesWithSrc.forEach((note) => {
+        noteMap.set(note.interaction_id, [...(noteMap.get(note.interaction_id) ?? []), note]);
+      });
+      const intsWithNotes = ints.map((interaction) => ({
+        ...interaction,
+        voiceNotes: noteMap.get(interaction.id) ?? [],
+      }));
       const personNotes = await db.select<PersonNoteRow[]>(
         "SELECT * FROM person_notes WHERE person_id=? ORDER BY created_at DESC",
         [id]
       );
       setPerson(p ?? null);
-      setInteractions(ints);
+      setInteractions(intsWithNotes);
       setNotes(personNotes);
     } catch (e: any) {
       console.error("Load person failed", e);
@@ -178,6 +211,20 @@ export default function Person() {
         {interactions.map((i) => (
           <li key={i.id} className="border rounded p-3">
             <div className="text-sm text-gray-500">{i.occurred_at}</div>
+            {i.voiceNotes.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {i.voiceNotes.map((note) => (
+                  <div key={note.id} className="flex items-center gap-3">
+                    <audio controls src={note.src} className="flex-1" />
+                    {typeof note.duration_seconds === "number" && (
+                      <span className="text-xs text-gray-500 whitespace-nowrap">
+                        {note.duration_seconds}s
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {/* later: summary, mood, next step */}
           </li>
         ))}

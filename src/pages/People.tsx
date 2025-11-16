@@ -62,7 +62,9 @@ export default function People() {
         <button onClick={add} className="px-3 py-2 rounded bg-black text-white">
           Add
         </button>
-        <button onClick={() => navigate(-1)} className="text-blue-600">← Back</button>
+        <button onClick={() => navigate("/", { replace: true })} className="text-blue-600">
+          ← Back
+        </button>
       </div>
 
       {err && <div className="mt-3 text-sm text-red-600">Error: {err}</div>}
