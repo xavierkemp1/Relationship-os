@@ -2,17 +2,46 @@
 import { writeFile, mkdir, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { v4 as uuid } from "uuid";
 
+type RecorderFactory = (stream: MediaStream, options: MediaRecorderOptions) => MediaRecorder;
+export type RecordVoiceDependencies = {
+  requestStream?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  mediaRecorderFactory?: RecorderFactory;
+  mkdir?: typeof mkdir;
+  writeFile?: typeof writeFile;
+  baseDir?: BaseDirectory;
+  idFactory?: () => string;
+  now?: () => number;
+};
+
+const defaultRequestStream = (constraints: MediaStreamConstraints) =>
+  navigator.mediaDevices.getUserMedia(constraints);
+
+const defaultRecorderFactory: RecorderFactory = (stream, options) => new MediaRecorder(stream, options);
+
 /** Start recording; call returned MediaRecorder.stop() to finish. */
-export async function recordVoice(onStop: (filePath: string, duration: number) => void) {
+export async function recordVoice(
+  onStop: (filePath: string, duration: number) => void,
+  deps: RecordVoiceDependencies = {}
+) {
+  const {
+    requestStream = defaultRequestStream,
+    mediaRecorderFactory = defaultRecorderFactory,
+    mkdir: mkdirFn = mkdir,
+    writeFile: writeFileFn = writeFile,
+    baseDir = BaseDirectory.AppData,
+    idFactory = uuid,
+    now = Date.now,
+  } = deps;
+
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await requestStream({ audio: true });
   } catch (err: any) {
     const message = err?.message ?? "Microphone access was denied";
     throw new Error(message);
   }
 
-  const rec = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+  const rec = mediaRecorderFactory(stream, { mimeType: "audio/webm;codecs=opus" });
   const chunks: BlobPart[] = [];
   let startedAt = 0;
   const releaseStream = () => {
@@ -25,7 +54,7 @@ export async function recordVoice(onStop: (filePath: string, duration: number) =
 
   rec.onstart = () => {
     console.log("[recording] MediaRecorder started");
-    startedAt = Date.now();
+    startedAt = now();
   };
   rec.ondataavailable = (e) => chunks.push(e.data);
   rec.onstop = async () => {
@@ -35,17 +64,17 @@ export async function recordVoice(onStop: (filePath: string, duration: number) =
       const blob = new Blob(chunks, { type: "audio/webm" });
       console.log("[recording] creating blob", { size: blob.size, type: blob.type });
       const arr = new Uint8Array(await blob.arrayBuffer());
-      const id = uuid();
+      const id = idFactory();
 
       // ensure app-data/voice exists, then save file
       const dir = "voice";
       try {
-        await mkdir(dir, { baseDir: BaseDirectory.AppData, recursive: true });
+        await mkdirFn(dir, { baseDir, recursive: true });
       } catch {}
       const path = `${dir}/${id}.webm`;
-      await writeFile(path, arr, { baseDir: BaseDirectory.AppData });
+      await writeFileFn(path, arr, { baseDir });
 
-      const duration = Math.round((Date.now() - startedAt) / 1000);
+      const duration = Math.round((now() - startedAt) / 1000);
       console.log("[recording] invoking onStop callback", { path, duration });
       await onStop(path, duration);
     } catch (err) {
