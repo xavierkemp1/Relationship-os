@@ -1,13 +1,18 @@
-// src/pages/People.tsx
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   calculateContactSchedule,
   formatDisplayDate,
   formatRelativeDays,
 } from "../lib/contactDates";
+import PageLayout, {
+  inputBaseClass,
+  labelClass,
+  sectionCardClass,
+  sectionTitleClass,
+} from "../components/PageLayout";
 
 type Person = {
   id: string;
@@ -19,6 +24,11 @@ type Person = {
 };
 
 type SortMode = "name" | "last_contact" | "next_contact" | "overdue";
+
+const primaryButtonClass =
+  "inline-flex items-center justify-center rounded-md bg-[#3A6FF8] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#315cce] disabled:opacity-60";
+const secondaryButtonClass =
+  "inline-flex items-center justify-center rounded-md border border-[#E5E7EB] px-4 py-2.5 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#3A6FF8] hover:text-[#3A6FF8]";
 
 export default function People() {
   const [name, setName] = useState("");
@@ -65,7 +75,8 @@ export default function People() {
     load();
   }, []);
 
-  const add = async () => {
+  const add = async (event?: FormEvent) => {
+    event?.preventDefault();
     try {
       setErr(null);
       const trimmed = name.trim();
@@ -114,123 +125,136 @@ export default function People() {
   }, [people, showOverdueOnly, sortMode]);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-4">People</h2>
-
-      <div className="flex gap-2 flex-wrap items-center">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Add someone…"
-          className="border rounded px-3 py-2 flex-1"
-        />
-        <button onClick={add} className="px-3 py-2 rounded bg-black text-white">
-          Add
-        </button>
-        <button onClick={() => navigate("/", { replace: true })} className="text-blue-600">
-          ← Back
-        </button>
-      </div>
-
-      {err && <div className="mt-3 text-sm text-red-600">Error: {err}</div>}
-      {loading && <div className="mt-3 text-sm text-gray-500">Loading…</div>}
-
-      <div className="mt-6 flex flex-wrap gap-4 items-center text-sm">
-        <label className="flex items-center gap-2">
-          Sort by
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="border rounded px-2 py-1"
-          >
-            <option value="name">Name</option>
-            <option value="last_contact">Last contacted</option>
-            <option value="next_contact">Next contact</option>
-            <option value="overdue">Overdue first</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2">
+    <PageLayout
+      title="People"
+      description="Keep everyone in one place, monitor contact cadence, and open a profile when it’s time to reconnect."
+      actions={
+        <Link to="/review" className={secondaryButtonClass}>
+          Weekly review
+        </Link>
+      }
+    >
+      <form onSubmit={add} className={`${sectionCardClass} space-y-4`}>
+        <div>
+          <label className={labelClass}>Add someone</label>
           <input
-            type="checkbox"
-            checked={showOverdueOnly}
-            onChange={(e) => setShowOverdueOnly(e.target.checked)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Name"
+            className={`${inputBaseClass} mt-2`}
           />
-          Show only overdue
-        </label>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-[#6B7280]">Add a name to start tracking interactions and reminders.</p>
+          <button type="submit" className={primaryButtonClass}>
+            Add person
+          </button>
+        </div>
+      </form>
+
+      <div className={`${sectionCardClass} space-y-4`}>
+        <h2 className={sectionTitleClass}>Sort & filters</h2>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end">
+          <div className="flex-1">
+            <label className={labelClass}>Sort by</label>
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className={`${inputBaseClass} mt-2`}
+            >
+              <option value="name">Name</option>
+              <option value="last_contact">Last contacted</option>
+              <option value="next_contact">Next contact</option>
+              <option value="overdue">Overdue first</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-3 text-base text-[#1A1A1A]">
+            <input
+              type="checkbox"
+              className="h-5 w-5 rounded border-[#E5E7EB] text-[#3A6FF8] focus:ring-[#3A6FF8]"
+              checked={showOverdueOnly}
+              onChange={(e) => setShowOverdueOnly(e.target.checked)}
+            />
+            Show only overdue
+          </label>
+        </div>
+        {err && <div className="text-sm text-red-600">Error: {err}</div>}
+        {loading && <div className="text-sm text-[#6B7280]">Loading…</div>}
       </div>
 
-      <div className="mt-6 overflow-x-auto">
-        <table className="min-w-full border text-sm">
-          <thead className="bg-gray-50 text-left">
-            <tr>
-              <th className="p-3 border-b">Person</th>
-              <th className="p-3 border-b">Last contacted</th>
-              <th className="p-3 border-b">Next contact</th>
-              <th className="p-3 border-b w-24">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {decorated.map((p) => (
-              <tr key={p.id} className="border-b">
-                <td className="p-3 align-top">
-                  <div className="font-medium flex items-center gap-2">
-                    {p.name}
-                    {p.metrics.isOverdue && (
-                      <span className="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">
-                        Overdue
-                      </span>
-                    )}
-                  </div>
-                  {p.context && <div className="text-gray-500 text-xs mt-1">{p.context}</div>}
-                </td>
-                <td className="p-3 align-top">
-                  {p.metrics.lastContactDate ? (
-                    <div>
-                      <div>{formatDisplayDate(p.metrics.lastContactDate)}</div>
-                      <div className="text-gray-500">{formatRelativeDays(p.metrics.daysSinceLast)}</div>
+      <div className={sectionCardClass}>
+        <h2 className={sectionTitleClass}>People list</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-base text-[#1A1A1A]">
+            <thead>
+              <tr className="text-[14px] uppercase tracking-wide text-[#6B7280]">
+                <th className="border-b border-[#E5E7EB] px-4 py-3 font-semibold">Person</th>
+                <th className="border-b border-[#E5E7EB] px-4 py-3 font-semibold">Last contacted</th>
+                <th className="border-b border-[#E5E7EB] px-4 py-3 font-semibold">Next contact</th>
+                <th className="border-b border-[#E5E7EB] px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decorated.map((p) => (
+                <tr key={p.id} className="border-b border-[#E5E7EB] transition hover:bg-[#F0F4FF]">
+                  <td className="px-4 py-4 align-top">
+                    <div className="flex items-center gap-2 text-[16px] font-medium">
+                      {p.name}
+                      {p.metrics.isOverdue && (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">Overdue</span>
+                      )}
                     </div>
-                  ) : (
-                    <span className="text-gray-400">No interactions yet</span>
-                  )}
-                </td>
-                <td className="p-3 align-top">
-                  {p.metrics.nextContactDate ? (
-                    <div>
-                      <div>{formatDisplayDate(p.metrics.nextContactDate)}</div>
-                      <div className="text-gray-500">
-                        {p.metrics.daysUntilNext !== null
-                          ? p.metrics.daysUntilNext < 0
-                            ? `${Math.abs(p.metrics.daysUntilNext)} day${Math.abs(p.metrics.daysUntilNext) === 1 ? "" : "s"} overdue`
-                            : p.metrics.daysUntilNext === 0
-                              ? "Due today"
-                              : `in ${p.metrics.daysUntilNext} day${p.metrics.daysUntilNext === 1 ? "" : "s"}`
-                          : ""}
+                    {p.context && <p className="mt-1 text-sm text-[#6B7280]">{p.context}</p>}
+                  </td>
+                  <td className="px-4 py-4 align-top text-[16px]">
+                    {p.metrics.lastContactDate ? (
+                      <div>
+                        <div className="font-medium">{formatDisplayDate(p.metrics.lastContactDate)}</div>
+                        <div className="text-sm text-[#6B7280]">{formatRelativeDays(p.metrics.daysSinceLast)}</div>
                       </div>
-                    </div>
-                  ) : (
-                    <span className="text-gray-400">Log an interaction</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  <button
-                    className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                    onClick={() => navigate(`/person/${p.id}`)}
-                  >
-                    Open
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {decorated.length === 0 && !loading && (
-              <tr>
-                <td colSpan={4} className="p-4 text-center text-gray-500">
-                  No people match the current filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    ) : (
+                      <span className="text-sm text-[#6B7280]">No interactions yet</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 align-top text-[16px]">
+                    {p.metrics.nextContactDate ? (
+                      <div>
+                        <div className="font-medium">{formatDisplayDate(p.metrics.nextContactDate)}</div>
+                        <div className="text-sm text-[#6B7280]">
+                          {p.metrics.daysUntilNext !== null
+                            ? p.metrics.daysUntilNext < 0
+                              ? `${Math.abs(p.metrics.daysUntilNext)} day${Math.abs(p.metrics.daysUntilNext) === 1 ? "" : "s"} overdue`
+                              : p.metrics.daysUntilNext === 0
+                                ? "Due today"
+                                : `in ${p.metrics.daysUntilNext} day${p.metrics.daysUntilNext === 1 ? "" : "s"}`
+                            : ""}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-[#6B7280]">Log an interaction</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <button
+                      className={`${secondaryButtonClass} w-full sm:w-auto`}
+                      onClick={() => navigate(`/person/${p.id}`)}
+                    >
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {decorated.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-[#6B7280]">
+                    No people match the current filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }
