@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDb } from "../lib/db";
+import PageLayout, { sectionCardClass, sectionTitleClass } from "../components/PageLayout";
 
 type Row = {
   id: string;
@@ -11,6 +12,9 @@ type Row = {
   recency: number | null;
   score: number;
 };
+
+const secondaryButtonClass =
+  "inline-flex items-center justify-center rounded-md border border-[#E5E7EB] px-3 py-1.5 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#3A6FF8] hover:text-[#3A6FF8]";
 
 export default function Review() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -52,25 +56,34 @@ export default function Review() {
   }, []);
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-4">Weekly Review — Top 5</h2>
-      <ul className="space-y-3">
-        {rows.map((r) => (
-          <li key={r.id} className="border rounded p-3 flex items-center justify-between">
-            <div>
-              <div className="font-medium">{r.name}</div>
-              <div className="text-sm text-gray-500">
-                {r.last ? `Last: ${r.last}` : "No interactions yet"} • {r.open_loops} open loops •
-                {" "}
-                {r.recency !== null ? `${r.recency}d` : "—"}
+    <PageLayout
+      title="Weekly review"
+      description="A quick look at the five relationships that deserve focus this week."
+      backLink={{ to: "/people", label: "People" }}
+    >
+      <div className={sectionCardClass}>
+        <h2 className={sectionTitleClass}>Top priorities</h2>
+        <ul className="mt-4 space-y-3">
+          {rows.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] p-4">
+              <div>
+                <p className="text-[16px] font-semibold text-[#1A1A1A]">{r.name}</p>
+                <p className="text-sm text-[#6B7280]">
+                  {r.last ? `Last: ${r.last}` : "No interactions yet"} • {r.open_loops} open loops • {r.recency !== null ? `${r.recency}d` : "—"}
+                </p>
               </div>
-            </div>
-            <Link className="text-blue-600" to={`/person/${r.id}`}>
-              Open
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+              <Link to={`/person/${r.id}`} className={secondaryButtonClass}>
+                Open
+              </Link>
+            </li>
+          ))}
+          {rows.length === 0 && (
+            <li className="rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
+              Loading review data…
+            </li>
+          )}
+        </ul>
+      </div>
+    </PageLayout>
   );
 }

@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
@@ -10,6 +10,12 @@ import {
   formatDisplayDate,
   formatRelativeDays,
 } from "../lib/contactDates";
+import PageLayout, {
+  inputBaseClass,
+  labelClass,
+  sectionCardClass,
+  sectionTitleClass,
+} from "../components/PageLayout";
 
 const interactionTypeOptions = [
   { value: "call", label: "Call" },
@@ -65,6 +71,13 @@ type InteractionFormState = {
   notes: string;
 };
 
+const primaryButtonClass =
+  "inline-flex items-center justify-center rounded-md bg-[#3A6FF8] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#315cce] disabled:opacity-60";
+const secondaryButtonClass =
+  "inline-flex items-center justify-center rounded-md border border-[#E5E7EB] px-4 py-2.5 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#3A6FF8] hover:text-[#3A6FF8]";
+const dangerButtonClass =
+  "inline-flex items-center justify-center rounded-md border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:border-red-400 hover:text-red-700";
+
 export default function Person() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -90,30 +103,54 @@ export default function Person() {
   const [status, setStatus] = useState<"idle" | "recording" | "saving">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const isTauri = useMemo(
+    () => typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__),
+    []
+  );
+
+  const resolveVoiceNoteSrc = async (filepath: string) => {
+    if (!filepath) return "";
+    try {
+      if (!isTauri) {
+        return filepath;
+      }
+      const dir = await appDataDir();
+      const fullPath = await join(dir, filepath);
+      return convertFileSrc(fullPath);
+    } catch (err) {
+      console.warn("Failed to resolve voice note source", err);
+      return filepath;
+    }
+  };
+
   const load = async () => {
     if (!id) return;
     try {
       setError(null);
       const db = await getDb();
-      const [p] = await db.select<PersonRow[]>("SELECT * FROM people WHERE id = ?", [id]);
-      const ints = await db.select<InteractionRow[]>(
-        "SELECT id, date, type, notes FROM interactions WHERE person_id=? ORDER BY date DESC",
-        [id]
-      );
-      const voiceRows = await db.select<VoiceNoteRow[]>(
-        `SELECT vn.id, vn.interaction_id, vn.filepath, vn.duration_seconds
-         FROM voice_notes vn
-         INNER JOIN interactions i ON vn.interaction_id = i.id
-         WHERE i.person_id=?`,
-        [id]
-      );
-      const dir = await appDataDir();
+      const [p, ints, voiceRows, personNotes] = await Promise.all([
+        db.select<PersonRow[]>("SELECT * FROM people WHERE id = ?", [id]).then((rows) => rows[0]),
+        db.select<InteractionRow[]>(
+          "SELECT id, date, type, notes FROM interactions WHERE person_id=? ORDER BY date DESC",
+          [id]
+        ),
+        db.select<VoiceNoteRow[]>(
+          `SELECT vn.id, vn.interaction_id, vn.filepath, vn.duration_seconds
+           FROM voice_notes vn
+           INNER JOIN interactions i ON vn.interaction_id = i.id
+           WHERE i.person_id=?`,
+          [id]
+        ),
+        db.select<PersonNoteRow[]>(
+          "SELECT * FROM person_notes WHERE person_id=? ORDER BY created_at DESC",
+          [id]
+        ),
+      ]);
       const notesWithSrc = await Promise.all(
-        voiceRows.map(async (note) => {
-          const fullPath = await join(dir, note.filepath);
-          const enriched: VoiceNote = { ...note, src: convertFileSrc(fullPath) };
-          return enriched;
-        })
+        voiceRows.map(async (note) => ({
+          ...note,
+          src: await resolveVoiceNoteSrc(note.filepath),
+        }))
       );
       const noteMap = new Map<string, VoiceNote[]>();
       notesWithSrc.forEach((note) => {
@@ -123,15 +160,16 @@ export default function Person() {
         ...interaction,
         voiceNotes: noteMap.get(interaction.id) ?? [],
       }));
-      const personNotes = await db.select<PersonNoteRow[]>(
-        "SELECT * FROM person_notes WHERE person_id=? ORDER BY created_at DESC",
-        [id]
-      );
       setPerson(p ?? null);
       setPersonForm({
         name: p?.name ?? "",
         context: p?.context ?? "",
-        ideal_contact_frequency_days: p?.ideal_contact_frequency_days ?? 14,
+        ideal_contact_frequency_days:
+          typeof p?.ideal_contact_frequency_days === "number"
+            ? p.ideal_contact_frequency_days
+            : typeof p?.ideal_contact_frequency_days === "string"
+              ? Number(p.ideal_contact_frequency_days) || 14
+              : 14,
       });
       setInteractions(intsWithNotes);
       setNotes(personNotes);
@@ -345,38 +383,36 @@ export default function Person() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-6">
-      <Link to="/people" className="text-blue-600">
-        ← Back
-      </Link>
-      <div>
-        <h2 className="text-2xl font-semibold mt-2">{person?.name ?? "Person"}</h2>
-        {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
-      </div>
+    <PageLayout
+      title={person?.name ?? "Person"}
+      backLink={{ to: "/people", label: "People" }}
+      description={person?.context || "Log interactions, track reminders, and keep richer history."}
+    >
+      {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="border rounded p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Last contacted</div>
-          <div className="text-lg font-semibold mt-1">
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className={`${sectionCardClass} space-y-1`}>
+          <p className="text-[14px] uppercase tracking-wide text-[#6B7280]">Last contacted</p>
+          <p className="text-[22px] font-semibold">
             {metrics.lastContactDate ? formatDisplayDate(metrics.lastContactDate) : "—"}
-          </div>
-          <div className="text-sm text-gray-500">
-            {metrics.lastContactDate ? `(${formatRelativeDays(metrics.daysSinceLast)})` : "No interactions yet"}
-          </div>
+          </p>
+          <p className="text-sm text-[#6B7280]">
+            {metrics.lastContactDate ? formatRelativeDays(metrics.daysSinceLast) : "No interactions yet"}
+          </p>
         </div>
-        <div className="border rounded p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Ideal frequency</div>
-          <div className="text-lg font-semibold mt-1">
+        <div className={`${sectionCardClass} space-y-1`}>
+          <p className="text-[14px] uppercase tracking-wide text-[#6B7280]">Ideal frequency</p>
+          <p className="text-[22px] font-semibold">
             {person?.ideal_contact_frequency_days ?? "—"} days
-          </div>
-          <div className="text-sm text-gray-500">Adjust below</div>
+          </p>
+          <p className="text-sm text-[#6B7280]">Update in the details form</p>
         </div>
-        <div className="border rounded p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Next contact</div>
-          <div className="text-lg font-semibold mt-1">
+        <div className={`${sectionCardClass} space-y-1`}>
+          <p className="text-[14px] uppercase tracking-wide text-[#6B7280]">Next contact</p>
+          <p className="text-[22px] font-semibold">
             {metrics.nextContactDate ? formatDisplayDate(metrics.nextContactDate) : "—"}
-          </div>
-          <div className={`text-sm ${metrics.isOverdue ? "text-red-600" : "text-gray-500"}`}>
+          </p>
+          <p className={`text-sm ${metrics.isOverdue ? "text-red-600" : "text-[#6B7280]"}`}>
             {metrics.nextContactDate
               ? metrics.daysUntilNext !== null && metrics.daysUntilNext < 0
                 ? `${Math.abs(metrics.daysUntilNext)} day${Math.abs(metrics.daysUntilNext) === 1 ? "" : "s"} overdue`
@@ -384,31 +420,30 @@ export default function Person() {
                   ? "Due today"
                   : `in ${metrics.daysUntilNext} day${metrics.daysUntilNext === 1 ? "" : "s"}`
               : "Log an interaction"}
-          </div>
+          </p>
         </div>
       </div>
 
-      <form onSubmit={savePersonDetails} className="border rounded p-4 space-y-3">
-        <h3 className="text-xl font-semibold">Person details</h3>
+      <form onSubmit={savePersonDetails} className={`${sectionCardClass} space-y-6`}>
+        <h2 className={sectionTitleClass}>Person details</h2>
         <div>
-          <label className="text-sm text-gray-600">Name</label>
+          <label className={labelClass}>Name</label>
           <input
             value={personForm.name}
             onChange={(e) => setPersonForm((prev) => ({ ...prev, name: e.target.value }))}
-            className="mt-1 w-full border rounded px-3 py-2"
+            className={`${inputBaseClass} mt-2`}
           />
         </div>
         <div>
-          <label className="text-sm text-gray-600">Context</label>
+          <label className={labelClass}>Context</label>
           <textarea
             value={personForm.context}
             onChange={(e) => setPersonForm((prev) => ({ ...prev, context: e.target.value }))}
-            className="mt-1 w-full border rounded px-3 py-2"
-            rows={3}
+            className={`${inputBaseClass} mt-2 min-h-[120px]`}
           />
         </div>
         <div>
-          <label className="text-sm text-gray-600">Ideal contact frequency (days)</label>
+          <label className={labelClass}>Ideal contact frequency (days)</label>
           <input
             type="number"
             min={1}
@@ -419,57 +454,57 @@ export default function Person() {
                 ideal_contact_frequency_days: e.target.value ? Number(e.target.value) : null,
               }))
             }
-            className="mt-1 w-full border rounded px-3 py-2"
+            className={`${inputBaseClass} mt-2`}
           />
         </div>
-        <div className="flex gap-3 flex-wrap">
-          <button
-            type="submit"
-            className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
-            disabled={personSaving}
-          >
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" className={primaryButtonClass} disabled={personSaving}>
             {personSaving ? "Saving…" : "Save details"}
           </button>
-          <button type="button" onClick={deletePerson} className="px-4 py-2 rounded border text-red-600">
+          <button type="button" onClick={deletePerson} className={dangerButtonClass}>
             Delete person
           </button>
         </div>
       </form>
 
-      <div className="flex gap-3 flex-wrap items-center">
+      <div className={`${sectionCardClass} flex flex-col gap-4 md:flex-row md:items-center md:justify-between`}>
+        <div>
+          <h2 className={sectionTitleClass}>Quick voice note</h2>
+          <p className="text-sm text-[#6B7280]">Capture a thought right after the conversation.</p>
+        </div>
         {status === "idle" ? (
-          <button onClick={startRecording} className="px-4 py-2 rounded bg-black text-white">
-            Record quick note
+          <button type="button" onClick={startRecording} className={primaryButtonClass}>
+            Record note
           </button>
         ) : status === "recording" ? (
-          <button onClick={stopRecording} className="px-4 py-2 rounded bg-red-600 text-white">
-            Stop
+          <button type="button" onClick={stopRecording} className={`${primaryButtonClass} bg-red-600 hover:bg-red-700`}>
+            Stop recording
           </button>
         ) : (
-          <button disabled className="px-4 py-2 rounded bg-gray-300 text-gray-600 cursor-not-allowed">
+          <button type="button" disabled className={`${secondaryButtonClass} text-[#6B7280]`}>
             Saving…
           </button>
         )}
       </div>
 
-      <form onSubmit={addInteraction} className="border rounded p-4 space-y-3">
-        <h3 className="text-xl font-semibold">Log an interaction</h3>
-        <div className="grid gap-3 md:grid-cols-2">
+      <form onSubmit={addInteraction} className={`${sectionCardClass} space-y-6`}>
+        <h2 className={sectionTitleClass}>Log an interaction</h2>
+        <div className="grid gap-6 md:grid-cols-2">
           <div>
-            <label className="text-sm text-gray-600">Date</label>
+            <label className={labelClass}>Date</label>
             <input
               type="date"
               value={interactionForm.date}
               onChange={(e) => setInteractionForm((prev) => ({ ...prev, date: e.target.value }))}
-              className="mt-1 w-full border rounded px-3 py-2"
+              className={`${inputBaseClass} mt-2`}
             />
           </div>
           <div>
-            <label className="text-sm text-gray-600">Type</label>
+            <label className={labelClass}>Type</label>
             <select
               value={interactionForm.type}
               onChange={(e) => setInteractionForm((prev) => ({ ...prev, type: e.target.value }))}
-              className="mt-1 w-full border rounded px-3 py-2"
+              className={`${inputBaseClass} mt-2`}
             >
               {interactionTypeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -480,49 +515,47 @@ export default function Person() {
           </div>
         </div>
         <div>
-          <label className="text-sm text-gray-600">Notes</label>
+          <label className={labelClass}>Notes</label>
           <textarea
             value={interactionForm.notes}
             onChange={(e) => setInteractionForm((prev) => ({ ...prev, notes: e.target.value }))}
-            className="mt-1 w-full border rounded px-3 py-2"
-            rows={3}
+            className={`${inputBaseClass} mt-2 min-h-[120px]`}
             placeholder="What did you talk about?"
           />
         </div>
         <div className="flex justify-end">
-          <button
-            type="submit"
-            className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-50"
-            disabled={interactionSaving}
-          >
+          <button type="submit" className={primaryButtonClass} disabled={interactionSaving}>
             {interactionSaving ? "Saving…" : "Add interaction"}
           </button>
         </div>
       </form>
 
-      <div>
-        <h3 className="text-xl font-semibold mb-2">Interaction timeline</h3>
-        <ul className="space-y-3">
+      <div className={`${sectionCardClass} space-y-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className={sectionTitleClass}>Interaction timeline</h2>
+          <p className="text-sm text-[#6B7280]">Newest first</p>
+        </div>
+        <ul className="space-y-4">
           {interactions.map((i) => {
             const parsedDate = parseDateOrNull(i.date);
             const typeLabel = interactionTypeOptions.find((opt) => opt.value === i.type)?.label ?? i.type ?? "Interaction";
             const relative = relativeLabelForDate(i.date);
             return (
-              <li key={i.id} className="border rounded p-3 space-y-2">
-                <div className="flex flex-wrap justify-between gap-2 text-sm text-gray-600">
-                  <span className="font-medium text-gray-800">
+              <li key={i.id} className="rounded-lg border border-[#E5E7EB] p-4">
+                <div className="flex flex-wrap justify-between gap-2 text-sm text-[#6B7280]">
+                  <span className="font-medium text-[#1A1A1A]">
                     {formatDisplayDate(parsedDate)} • {typeLabel}
                   </span>
                   {relative && <span>{relative}</span>}
                 </div>
-                {i.notes && <p className="whitespace-pre-wrap text-gray-800">{i.notes}</p>}
+                {i.notes && <p className="mt-2 whitespace-pre-wrap text-base text-[#1A1A1A]">{i.notes}</p>}
                 {i.voiceNotes.length > 0 && (
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-3 space-y-2">
                     {i.voiceNotes.map((note) => (
-                      <div key={note.id} className="flex items-center gap-3">
-                        <audio controls src={note.src} className="flex-1" />
+                      <div key={note.id} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <audio controls src={note.src} className="w-full" />
                         {typeof note.duration_seconds === "number" && (
-                          <span className="text-xs text-gray-500 whitespace-nowrap">{note.duration_seconds}s</span>
+                          <span className="text-xs text-[#6B7280]">{note.duration_seconds}s</span>
                         )}
                       </div>
                     ))}
@@ -532,66 +565,60 @@ export default function Person() {
             );
           })}
           {interactions.length === 0 && (
-            <li className="text-sm text-gray-500">No interactions yet. Use the form above to log one.</li>
+            <li className="rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
+              No interactions yet. Add your first one above to start tracking your relationship.
+            </li>
           )}
         </ul>
       </div>
 
-      <div>
-        <h3 className="text-xl font-semibold mb-2">Notes</h3>
+      <div className={`${sectionCardClass} space-y-6`}>
+        <h2 className={sectionTitleClass}>Notes</h2>
         <div className="space-y-3">
           <textarea
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
             placeholder="Jot down a thought about this person…"
-            className="w-full border rounded p-3"
+            className={`${inputBaseClass} min-h-[120px]`}
           />
           <div className="flex justify-end">
-            <button
-              onClick={addNote}
-              className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
-              disabled={!noteDraft.trim()}
-            >
+            <button type="button" onClick={addNote} className={primaryButtonClass} disabled={!noteDraft.trim()}>
               Save note
             </button>
           </div>
         </div>
 
-        <ul className="mt-4 space-y-3">
+        <ul className="space-y-4">
           {notes.map((note) => (
-            <li key={note.id} className="border rounded p-3">
+            <li key={note.id} className="rounded-lg border border-[#E5E7EB] p-4">
               {editingId === note.id ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <textarea
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
-                    className="w-full border rounded p-2"
+                    className={`${inputBaseClass} min-h-[120px]`}
                   />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={saveEdit}
-                      className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-50"
-                      disabled={!editingText.trim()}
-                    >
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={saveEdit} className={primaryButtonClass} disabled={!editingText.trim()}>
                       Save
                     </button>
-                    <button onClick={cancelEdit} className="px-3 py-1 rounded bg-gray-200">
+                    <button type="button" onClick={cancelEdit} className={secondaryButtonClass}>
                       Cancel
                     </button>
                   </div>
                 </div>
               ) : (
-                <div>
-                  <p className="whitespace-pre-wrap text-gray-800">{note.body}</p>
-                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                <div className="space-y-3">
+                  <p className="whitespace-pre-wrap text-base text-[#1A1A1A]">{note.body}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#6B7280]">
                     <span>Added {note.created_at}</span>
                     {note.updated_at && <span>Updated {note.updated_at}</span>}
                   </div>
-                  <div className="mt-3 flex gap-3">
-                    <button onClick={() => beginEdit(note)} className="text-blue-600 text-sm">
+                  <div className="flex gap-4 text-sm font-medium">
+                    <button type="button" onClick={() => beginEdit(note)} className="text-[#3A6FF8]">
                       Edit
                     </button>
-                    <button onClick={() => deleteNote(note.id)} className="text-red-600 text-sm">
+                    <button type="button" onClick={() => deleteNote(note.id)} className="text-red-600">
                       Delete
                     </button>
                   </div>
@@ -600,10 +627,12 @@ export default function Person() {
             </li>
           ))}
           {notes.length === 0 && (
-            <li className="text-sm text-gray-500">No notes yet. Use the box above to add one.</li>
+            <li className="rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
+              No notes yet. Use the box above to capture something memorable.
+            </li>
           )}
         </ul>
       </div>
-    </div>
+    </PageLayout>
   );
 }
