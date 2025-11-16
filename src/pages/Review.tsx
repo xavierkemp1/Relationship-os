@@ -20,7 +20,7 @@ export default function Review() {
       const db = await getDb();
       const people = await db.select<any[]>(
         `SELECT p.id, p.name, COALESCE(p.importance,3) as importance,
-          (SELECT occurred_at FROM interactions i WHERE i.person_id=p.id ORDER BY occurred_at DESC LIMIT 1) as last,
+          (SELECT date FROM interactions i WHERE i.person_id=p.id ORDER BY date DESC LIMIT 1) as last,
           (SELECT COUNT(1) FROM commitments c WHERE c.person_id=p.id AND c.status='open' AND (c.due_date IS NULL OR c.due_date <= datetime('now','+7 day'))) as open_loops
         FROM people p`
       );

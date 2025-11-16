@@ -13,19 +13,16 @@ export const getDb = async () => {
       context TEXT,
       importance INTEGER DEFAULT 3,
       tags TEXT,
+      ideal_contact_frequency_days INTEGER DEFAULT 14,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS interactions (
       id TEXT PRIMARY KEY,
       person_id TEXT NOT NULL,
-      occurred_at DATETIME NOT NULL,
-      mood INTEGER,
-      energy INTEGER,
-      topics TEXT,
-      summary TEXT,
-      next_step TEXT,
-      due_date DATETIME,
+      date DATETIME NOT NULL,
+      type TEXT,
+      notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE
     );
