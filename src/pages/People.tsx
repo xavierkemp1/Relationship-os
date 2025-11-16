@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 type Person = { id: string; name: string; context?: string; importance?: number };
 

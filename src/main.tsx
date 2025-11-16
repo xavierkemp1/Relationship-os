@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import "./app.css"; // if your file is named differently, keep that name
+import "./App.css";
 import App from "./pages/App";
 import People from "./pages/People";
 import Person from "./pages/Person";
