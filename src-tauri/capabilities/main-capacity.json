@@ -10,6 +10,10 @@
     "core:resources:default",
 
     "fs:default",
+    "fs:allow-create-dir",
+    "fs:allow-write-file",
+    "fs:allow-appdata-write",
+    "fs:allow-appdata-write-recursive",
 
     "sql:allow-load",
     "sql:allow-select",
