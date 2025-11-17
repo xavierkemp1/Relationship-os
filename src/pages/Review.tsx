@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDb } from "../lib/db";
 import PageLayout, { sectionCardClass, sectionTitleClass } from "../components/PageLayout";
-import { supabase } from "../lib/supabaseClient";
-
 type Row = {
   id: string;
   name: string;
