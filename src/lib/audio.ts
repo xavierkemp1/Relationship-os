@@ -18,7 +18,6 @@ const defaultRequestStream = (constraints: MediaStreamConstraints) =>
 
 const defaultRecorderFactory: RecorderFactory = (stream, options) => new MediaRecorder(stream, options);
 
-// ✅ helper to detect Tauri vs browser
 const isTauriEnv =
   typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
 
@@ -70,43 +69,48 @@ export async function recordVoice(
 
   rec.onstop = async () => {
     console.log("[recording] MediaRecorder onstop triggered", { chunkCount: chunks.length });
+    let filePath = "";
+    let duration = 0;
+
     try {
       console.log("[recording] preparing to create blob");
       const blob = new Blob(chunks, { type: "audio/webm" });
       console.log("[recording] creating blob", { size: blob.size, type: blob.type });
 
-      const duration = Math.round((now() - startedAt) / 1000);
+      duration = Math.round((now() - startedAt) / 1000);
 
-      // ✅ BROWSER FALLBACK: no Tauri FS, just use a blob URL as the "filepath"
       if (!isTauriEnv) {
-        const url = URL.createObjectURL(blob);
-        console.log("[recording] non-Tauri environment, using blob URL", { url, duration });
-        await onStop(url, duration);
-        releaseStream();
-        return;
+        // Browser fallback – use blob URL
+        filePath = URL.createObjectURL(blob);
+        console.log("[recording] non-Tauri environment, using blob URL", { filePath, duration });
+      } else {
+        // Tauri – write to app data
+        const arr = new Uint8Array(await blob.arrayBuffer());
+        const id = idFactory();
+
+        const dir = "voice";
+        try {
+          await mkdirFn(dir, { baseDir, recursive: true });
+        } catch {
+          // ignore if exists
+        }
+
+        const path = `${dir}/${id}.webm`;
+        await writeFileFn(path, arr, { baseDir });
+        filePath = path;
+        console.log("[recording] wrote file", { filePath, duration });
       }
 
-      // ✅ TAURI PATH: write to app data with plugin-fs
-      const arr = new Uint8Array(await blob.arrayBuffer());
-      const id = idFactory();
-
-      const dir = "voice";
-      try {
-        await mkdirFn(dir, { baseDir, recursive: true });
-      } catch {
-        // ignore if it already exists
-      }
-
-      const path = `${dir}/${id}.webm`;
-      await writeFileFn(path, arr, { baseDir });
-
-      const filePath = path;
-      console.log("[recording] invoking onStop callback", { filePath, duration });
+      // ✅ Always call onStop if we got this far
       await onStop(filePath, duration);
     } catch (err) {
       console.error("[recording] error while processing recording", err);
-      // we still rethrow for debugging, but UI now handles state better
-      throw err;
+      // ✅ Even on failure, call onStop with a sentinel so UI can recover
+      try {
+        await onStop("", 0);
+      } catch {
+        // ignore
+      }
     } finally {
       releaseStream();
     }
