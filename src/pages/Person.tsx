@@ -283,37 +283,44 @@ export default function Person() {
   };
 
   const startRecording = async () => {
-    console.log("[recording] startRecording called");
-    if (!id || status !== "idle") return;
-    try {
-      setError(null);
-      const recorder = await recordVoice(async (filePath, duration) => {
-        console.log("[recording] calling saveRecording", { filePath, duration });
-        setStatus("saving");
-        try {
-          const db = await getDb();
-          const interactionId = uuid();
-          await db.execute("INSERT INTO interactions (id, person_id, date, type, notes) VALUES (?,?,?,?,?)", [
-            interactionId,
-            id,
-            new Date().toISOString(),
-            "voice_note",
-            "Voice memo",
-          ]);
-          await db.execute(
-            "INSERT INTO voice_notes (id, interaction_id, filepath, duration_seconds) VALUES (?,?,?,?)",
-            [uuid(), interactionId, filePath, duration]
-          );
-          await load();
-          console.log("[recording] saveRecording success", { interactionId, filePath });
-        } catch (dbErr: any) {
-          console.error("[recording] saveRecording error", dbErr);
-          setError(dbErr?.message ?? "Failed to save note");
-        } finally {
-          recRef.current = null;
-          setStatus("idle");
-        }
-      });
+      console.log("[recording] startRecording called");
+      if (!id || status !== "idle") return;
+      try {
+        setError(null);
+          const recorder = await recordVoice(async (filePath, duration) => {
+          console.log("[recording] calling saveRecording", { filePath, duration });
+          setStatus("saving");
+          try {
+            // If filePath is empty, the FS write failed – bail gracefully
+            if (!filePath) {
+              setError("Failed to save audio file.");
+              return;
+            }
+        
+            const db = await getDb();
+            const interactionId = uuid();
+            await db.execute("INSERT INTO interactions (id, person_id, date, type, notes) VALUES (?,?,?,?,?)", [
+              interactionId,
+              id,
+              new Date().toISOString(),
+              "voice_note",
+              "Voice memo",
+            ]);
+            await db.execute(
+              "INSERT INTO voice_notes (id, interaction_id, filepath, duration_seconds) VALUES (?,?,?,?)",
+              [uuid(), interactionId, filePath, duration]
+            );
+            await load();
+            console.log("[recording] saveRecording success", { interactionId, filePath });
+          } catch (dbErr: any) {
+            console.error("[recording] saveRecording error", dbErr);
+            setError(dbErr?.message ?? "Failed to save note");
+          } finally {
+            recRef.current = null;
+            setStatus("idle");
+          }
+        });
+
       recRef.current = recorder;
       setStatus("recording");
     } catch (e: any) {
