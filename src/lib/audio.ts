@@ -1,6 +1,7 @@
 // src/lib/audio.ts
 import { writeFile, mkdir, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { v4 as uuid } from "uuid";
+import { supabase } from "../lib/supabaseClient";
 
 type RecorderFactory = (stream: MediaStream, options: MediaRecorderOptions) => MediaRecorder;
 export type RecordVoiceDependencies = {

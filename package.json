@@ -11,6 +11,7 @@
     "test": "node -e \"const fs=require('node:fs');if(fs.existsSync('dist-tests')) fs.rmSync('dist-tests',{recursive:true,force:true});\" && tsc -p tsconfig.tests.json && node --test tests/audio.test.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.81.1",
     "@tanstack/react-query": "^5.90.9",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-fs": "~2",

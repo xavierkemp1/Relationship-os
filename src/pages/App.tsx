@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import PageLayout, { sectionCardClass } from "../components/PageLayout";
+import { supabase } from "../lib/supabaseClient";
 
 export default function App() {
   return (

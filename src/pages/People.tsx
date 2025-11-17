@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
 import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
+
 import {
   calculateContactSchedule,
   formatDisplayDate,

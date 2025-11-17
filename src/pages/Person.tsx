@@ -5,6 +5,10 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
 import { recordVoice } from "../lib/audio";
+import { PersonVoiceNotes } from "../components/PersonVoiceNotes";
+
+import { supabase } from "../lib/supabaseClient";
+
 import {
   calculateScheduleFromInteractions,
   formatDisplayDate,
@@ -591,6 +595,9 @@ export default function Person() {
           )}
         </ul>
       </div>
+      
+      {id && <PersonVoiceNotes personId={id} />}
+
 
       <div className={`${sectionCardClass} space-y-6`}>
         <h2 className={sectionTitleClass}>Notes</h2>
