@@ -11,6 +11,7 @@ export type RecordVoiceDependencies = {
   baseDir?: BaseDirectory;
   idFactory?: () => string;
   now?: () => number;
+  isTauriEnv?: boolean;
 };
 
 const defaultRequestStream = (constraints: MediaStreamConstraints) =>
@@ -18,7 +19,7 @@ const defaultRequestStream = (constraints: MediaStreamConstraints) =>
 
 const defaultRecorderFactory: RecorderFactory = (stream, options) => new MediaRecorder(stream, options);
 
-const isTauriEnv =
+const defaultIsTauriEnv =
   typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
 
 /** Start recording; call returned MediaRecorder.stop() to finish. */
@@ -34,7 +35,10 @@ export async function recordVoice(
     baseDir = BaseDirectory.AppData,
     idFactory = uuid,
     now = Date.now,
+    isTauriEnv: forcedTauriEnv,
   } = deps;
+
+  const isTauriEnv = forcedTauriEnv ?? defaultIsTauriEnv;
 
   let stream: MediaStream;
   try {

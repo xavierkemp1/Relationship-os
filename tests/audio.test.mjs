@@ -81,6 +81,7 @@ test("recordVoice saves the blob and notifies the UI callback", async () => {
     },
     idFactory: () => "test-id",
     now,
+    isTauriEnv: true,
   };
 
   const recorder = await recordVoice(async (filePath, duration) => {
