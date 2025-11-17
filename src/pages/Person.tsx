@@ -1,13 +1,8 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
-import { recordVoice } from "../lib/audio";
 import { PersonVoiceNotes } from "../components/PersonVoiceNotes";
-
-import { supabase } from "../lib/supabaseClient";
 
 import {
   calculateScheduleFromInteractions,
@@ -54,14 +49,7 @@ type PersonRow = {
 };
 type InteractionRow = { id: string; date: string; type: string | null; notes: string | null };
 type PersonNoteRow = { id: string; body: string; created_at: string; updated_at: string | null };
-type VoiceNoteRow = {
-  id: string;
-  interaction_id: string;
-  filepath: string;
-  duration_seconds: number | null;
-};
-type VoiceNote = VoiceNoteRow & { src: string };
-type Interaction = InteractionRow & { voiceNotes: VoiceNote[] };
+type Interaction = InteractionRow;
 
 type PersonFormState = {
   name: string;
@@ -103,46 +91,17 @@ export default function Person() {
   const [noteDraft, setNoteDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const recRef = useRef<MediaRecorder | null>(null);
-  const [status, setStatus] = useState<"idle" | "recording" | "saving">("idle");
   const [error, setError] = useState<string | null>(null);
-
-  const isTauri = useMemo(
-    () => typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__),
-    []
-  );
-
-  const resolveVoiceNoteSrc = async (filepath: string) => {
-    if (!filepath) return "";
-    try {
-      if (!isTauri) {
-        return filepath;
-      }
-      const dir = await appDataDir();
-      const fullPath = await join(dir, filepath);
-      return convertFileSrc(fullPath);
-    } catch (err) {
-      console.warn("Failed to resolve voice note source", err);
-      return filepath;
-    }
-  };
 
   const load = async () => {
     if (!id) return;
     try {
       setError(null);
       const db = await getDb();
-      const [p, ints, voiceRows, personNotes] = await Promise.all([
+      const [p, ints, personNotes] = await Promise.all([
         db.select<PersonRow[]>("SELECT * FROM people WHERE id = ?", [id]).then((rows) => rows[0]),
         db.select<InteractionRow[]>(
           "SELECT id, date, type, notes FROM interactions WHERE person_id=? ORDER BY date DESC",
-          [id]
-        ),
-        db.select<VoiceNoteRow[]>(
-          `SELECT vn.id, vn.interaction_id, vn.filepath, vn.duration_seconds
-           FROM voice_notes vn
-           INNER JOIN interactions i ON vn.interaction_id = i.id
-           WHERE i.person_id=?`,
           [id]
         ),
         db.select<PersonNoteRow[]>(
@@ -150,20 +109,6 @@ export default function Person() {
           [id]
         ),
       ]);
-      const notesWithSrc = await Promise.all(
-        voiceRows.map(async (note) => ({
-          ...note,
-          src: await resolveVoiceNoteSrc(note.filepath),
-        }))
-      );
-      const noteMap = new Map<string, VoiceNote[]>();
-      notesWithSrc.forEach((note) => {
-        noteMap.set(note.interaction_id, [...(noteMap.get(note.interaction_id) ?? []), note]);
-      });
-      const intsWithNotes = ints.map((interaction) => ({
-        ...interaction,
-        voiceNotes: noteMap.get(interaction.id) ?? [],
-      }));
       setPerson(p ?? null);
       setPersonForm({
         name: p?.name ?? "",
@@ -175,7 +120,7 @@ export default function Person() {
               ? Number(p.ideal_contact_frequency_days) || 14
               : 14,
       });
-      setInteractions(intsWithNotes);
+      setInteractions(ints);
       setNotes(personNotes);
       setInteractionForm((prev) => ({ ...prev, date: todayInputValue() }));
     } catch (e: any) {
@@ -187,16 +132,6 @@ export default function Person() {
   useEffect(() => {
     load();
   }, [id]);
-
-  useEffect(() => {
-    return () => {
-      if (recRef.current) {
-        try {
-          recRef.current.stop();
-        } catch {}
-      }
-    };
-  }, []);
 
   const metrics = useMemo(
     () =>
@@ -283,69 +218,6 @@ export default function Person() {
       setError(e?.message ?? "Failed to add interaction");
     } finally {
       setInteractionSaving(false);
-    }
-  };
-
-  const startRecording = async () => {
-      console.log("[recording] startRecording called");
-      if (!id || status !== "idle") return;
-      try {
-        setError(null);
-          const recorder = await recordVoice(async (filePath, duration) => {
-          console.log("[recording] calling saveRecording", { filePath, duration });
-          setStatus("saving");
-          try {
-            // If filePath is empty, the FS write failed – bail gracefully
-            if (!filePath) {
-              setError("Failed to save audio file.");
-              return;
-            }
-        
-            const db = await getDb();
-            const interactionId = uuid();
-            await db.execute("INSERT INTO interactions (id, person_id, date, type, notes) VALUES (?,?,?,?,?)", [
-              interactionId,
-              id,
-              new Date().toISOString(),
-              "voice_note",
-              "Voice memo",
-            ]);
-            await db.execute(
-              "INSERT INTO voice_notes (id, interaction_id, filepath, duration_seconds) VALUES (?,?,?,?)",
-              [uuid(), interactionId, filePath, duration]
-            );
-            await load();
-            console.log("[recording] saveRecording success", { interactionId, filePath });
-          } catch (dbErr: any) {
-            console.error("[recording] saveRecording error", dbErr);
-            setError(dbErr?.message ?? "Failed to save note");
-          } finally {
-            recRef.current = null;
-            setStatus("idle");
-          }
-        });
-
-      recRef.current = recorder;
-      setStatus("recording");
-    } catch (e: any) {
-      console.error("[recording] startRecording failed", e);
-      setStatus("idle");
-      setError(e?.message ?? "Unable to start recording");
-    }
-  };
-
-  const stopRecording = () => {
-    console.log("[recording] stopRecording called");
-    if (!recRef.current) {
-      console.warn("[recording] stopRecording called without active recorder");
-      return;
-    }
-    setStatus("saving");
-    try {
-      recRef.current.stop();
-    } catch (err) {
-      console.error("[recording] failed to stop recorder", err);
-      setStatus("idle");
     }
   };
 
@@ -491,26 +363,6 @@ export default function Person() {
         </div>
       </form>
 
-      <div className={`${sectionCardClass} flex flex-col gap-4 md:flex-row md:items-center md:justify-between`}>
-        <div>
-          <h2 className={sectionTitleClass}>Quick voice note</h2>
-          <p className="text-sm text-[#6B7280]">Capture a thought right after the conversation.</p>
-        </div>
-        {status === "idle" ? (
-          <button type="button" onClick={startRecording} className={primaryButtonClass}>
-            Record note
-          </button>
-        ) : status === "recording" ? (
-          <button type="button" onClick={stopRecording} className={`${primaryButtonClass} bg-red-600 hover:bg-red-700`}>
-            Stop recording
-          </button>
-        ) : (
-          <button type="button" disabled className={`${secondaryButtonClass} text-[#6B7280]`}>
-            Saving…
-          </button>
-        )}
-      </div>
-
       <form onSubmit={addInteraction} className={`${sectionCardClass} space-y-6`}>
         <h2 className={sectionTitleClass}>Log an interaction</h2>
         <div className="grid gap-6 md:grid-cols-2">
@@ -573,18 +425,6 @@ export default function Person() {
                   {relative && <span>{relative}</span>}
                 </div>
                 {i.notes && <p className="mt-2 whitespace-pre-wrap text-base text-[#1A1A1A]">{i.notes}</p>}
-                {i.voiceNotes.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {i.voiceNotes.map((note) => (
-                      <div key={note.id} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <audio controls src={note.src} className="w-full" />
-                        {typeof note.duration_seconds === "number" && (
-                          <span className="text-xs text-[#6B7280]">{note.duration_seconds}s</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </li>
             );
           })}

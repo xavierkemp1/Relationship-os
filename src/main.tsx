@@ -7,8 +7,6 @@ import App from "./pages/App";
 import People from "./pages/People";
 import Person from "./pages/Person";
 import Review from "./pages/Review";
-import { supabase } from "../lib/supabaseClient";
-
 
 const router = createBrowserRouter([
   { path: "/", element: <App /> },

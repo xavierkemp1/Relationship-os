@@ -1,7 +1,5 @@
 // src/lib/db.ts
 import Database from "@tauri-apps/plugin-sql";
-import { supabase } from "../lib/supabaseClient";
-
 /** Opens (or creates) a local SQLite DB and ensures tables exist. */
 type ColumnInfo = { name: string };
 
