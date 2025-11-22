@@ -1,48 +1,88 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Separator } from "@/components/ui/separator";
 
-export const sectionCardClass = "bg-white border border-[#E5E7EB] rounded-lg shadow-sm p-6";
-export const inputBaseClass =
-  "w-full rounded-md border border-[#E5E7EB] bg-white px-3 py-2.5 text-[16px] text-[#1A1A1A] transition focus:border-[#3A6FF8] focus:ring-2 focus:ring-[#3A6FF8] focus:outline-none focus:shadow-[0_0_0_2px_rgba(58,111,248,0.12)]";
-export const labelClass = "text-sm font-medium text-[#555555]";
-export const sectionTitleClass = "text-[18px] font-medium text-[#1A1A1A]";
+type BackLink = {
+  to: string;
+  label: string;
+};
 
-interface PageLayoutProps {
-  children: ReactNode;
-  title?: string;
+type PageLayoutProps = {
+  title: string;
   description?: string;
   actions?: ReactNode;
-  backLink?: { to: string; label: string };
-}
+  backLink?: BackLink;
+  children: ReactNode;
+};
 
-export default function PageLayout({ children, title, description, actions, backLink }: PageLayoutProps) {
+// Cards: white on light gray background
+export const sectionCardClass =
+  "rounded-2xl border border-slate-200 bg-white shadow-sm p-5 md:p-6";
+
+// Inputs: shadcn-style focus, but using slate palette
+export const inputBaseClass =
+  "flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
+export const labelClass = "text-sm font-medium text-slate-800";
+export const sectionTitleClass =
+  "text-sm font-semibold tracking-tight text-slate-900";
+
+export default function PageLayout({
+  title,
+  description,
+  actions,
+  backLink,
+  children,
+}: PageLayoutProps) {
   return (
-    <div className="min-h-screen bg-[#F7F8FA] text-[#1A1A1A] font-[system-ui]">
-      <header className="bg-white border-b border-[#E5E7EB] shadow-sm">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center px-6">
-          <Link to="/people" className="text-[20px] font-semibold tracking-tight text-[#1A1A1A]">
-            Relationship OS
-          </Link>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      {/* App header */}
+      <header className="border-b border-slate-800 bg-slate-950 text-slate-50">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 md:py-4">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">
+              Relationship OS
+            </h1>
+            <p className="text-xs text-slate-400">
+              Intentional follow-ups with the people who matter.
+            </p>
+          </div>
+          {actions && (
+            <div className="hidden items-center gap-2 md:flex">{actions}</div>
+          )}
         </div>
       </header>
-      <main className="px-6 py-8">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-          {(title || description || backLink || actions) && (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-2">
-                {backLink && (
-                  <Link to={backLink.to} className="text-sm font-medium text-[#6B7280] hover:text-[#3A6FF8]">
-                    ← {backLink.label}
-                  </Link>
-                )}
-                {title && <h1 className="text-[28px] font-semibold text-[#1A1A1A]">{title}</h1>}
-                {description && <p className="text-base text-[#6B7280]">{description}</p>}
-              </div>
-              {actions && <div className="flex flex-wrap gap-3">{actions}</div>}
+
+      {/* Page content */}
+      <main className="mx-auto flex max-w-5xl flex-1 flex-col px-4 py-4 md:py-6">
+        <div className="mb-4 flex items-start justify-between gap-4 md:mb-6">
+          <div className="space-y-2">
+            {backLink && (
+              <Link
+                to={backLink.to}
+                className="inline-flex items-center text-xs font-medium text-slate-500 hover:text-slate-900"
+              >
+                <span className="mr-1">←</span>
+                {backLink.label}
+              </Link>
+            )}
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
+                {title}
+              </h2>
+              {description && (
+                <p className="mt-1 text-sm text-slate-500">{description}</p>
+              )}
             </div>
+          </div>
+          {actions && (
+            <div className="flex items-center gap-2 md:hidden">{actions}</div>
           )}
-          {children}
         </div>
+
+        <Separator className="mb-4 md:mb-6" />
+
+        <div className="flex-1 space-y-4 md:space-y-6">{children}</div>
       </main>
     </div>
   );

@@ -1,3 +1,4 @@
+// src/pages/Person.tsx
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { v4 as uuid } from "uuid";
@@ -15,6 +16,9 @@ import PageLayout, {
   sectionCardClass,
   sectionTitleClass,
 } from "../components/PageLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const interactionTypeOptions = [
   { value: "call", label: "Call" },
@@ -47,8 +51,18 @@ type PersonRow = {
   context?: string;
   ideal_contact_frequency_days: number | null;
 };
-type InteractionRow = { id: string; date: string; type: string | null; notes: string | null };
-type PersonNoteRow = { id: string; body: string; created_at: string; updated_at: string | null };
+type InteractionRow = {
+  id: string;
+  date: string;
+  type: string | null;
+  notes: string | null;
+};
+type PersonNoteRow = {
+  id: string;
+  body: string;
+  created_at: string;
+  updated_at: string | null;
+};
 type Interaction = InteractionRow;
 
 type PersonFormState = {
@@ -63,13 +77,6 @@ type InteractionFormState = {
   notes: string;
 };
 
-const primaryButtonClass =
-  "inline-flex items-center justify-center rounded-md bg-[#3A6FF8] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#315cce] disabled:opacity-60";
-const secondaryButtonClass =
-  "inline-flex items-center justify-center rounded-md border border-[#E5E7EB] px-4 py-2.5 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#3A6FF8] hover:text-[#3A6FF8]";
-const dangerButtonClass =
-  "inline-flex items-center justify-center rounded-md border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:border-red-400 hover:text-red-700";
-
 export default function Person() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -81,11 +88,12 @@ export default function Person() {
   });
   const [personSaving, setPersonSaving] = useState(false);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
-  const [interactionForm, setInteractionForm] = useState<InteractionFormState>({
-    date: todayInputValue(),
-    type: interactionTypeOptions[0]?.value ?? "call",
-    notes: "",
-  });
+  const [interactionForm, setInteractionForm] =
+    useState<InteractionFormState>({
+      date: todayInputValue(),
+      type: interactionTypeOptions[0]?.value ?? "call",
+      notes: "",
+    });
   const [interactionSaving, setInteractionSaving] = useState(false);
   const [notes, setNotes] = useState<PersonNoteRow[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
@@ -99,7 +107,9 @@ export default function Person() {
       setError(null);
       const db = await getDb();
       const [p, ints, personNotes] = await Promise.all([
-        db.select<PersonRow[]>("SELECT * FROM people WHERE id = ?", [id]).then((rows) => rows[0]),
+        db
+          .select<PersonRow[]>("SELECT * FROM people WHERE id = ?", [id])
+          .then((rows) => rows[0]),
         db.select<InteractionRow[]>(
           "SELECT id, date, type, notes FROM interactions WHERE person_id=? ORDER BY date DESC",
           [id]
@@ -117,12 +127,15 @@ export default function Person() {
           typeof p?.ideal_contact_frequency_days === "number"
             ? p.ideal_contact_frequency_days
             : typeof p?.ideal_contact_frequency_days === "string"
-              ? Number(p.ideal_contact_frequency_days) || 14
-              : 14,
+            ? Number(p.ideal_contact_frequency_days) || 14
+            : 14,
       });
       setInteractions(ints);
       setNotes(personNotes);
-      setInteractionForm((prev) => ({ ...prev, date: todayInputValue() }));
+      setInteractionForm((prev) => ({
+        ...prev,
+        date: todayInputValue(),
+      }));
     } catch (e: any) {
       console.error("Load person failed", e);
       setError(e?.message ?? "Failed to load person");
@@ -160,12 +173,10 @@ export default function Person() {
         personForm.ideal_contact_frequency_days > 0
           ? Math.round(personForm.ideal_contact_frequency_days)
           : null;
-      await db.execute("UPDATE people SET name=?, context=?, ideal_contact_frequency_days=? WHERE id=?", [
-        trimmedName,
-        personForm.context.trim() || null,
-        freq,
-        id,
-      ]);
+      await db.execute(
+        "UPDATE people SET name=?, context=?, ideal_contact_frequency_days=? WHERE id=?",
+        [trimmedName, personForm.context.trim() || null, freq, id]
+      );
       await load();
     } catch (e: any) {
       console.error("Update person failed", e);
@@ -177,7 +188,9 @@ export default function Person() {
 
   const deletePerson = async () => {
     if (!id) return;
-    const confirmDelete = window.confirm("Delete this person and all their data?");
+    const confirmDelete = window.confirm(
+      "Delete this person and all their data?"
+    );
     if (!confirmDelete) return;
     try {
       setError(null);
@@ -199,14 +212,19 @@ export default function Person() {
       setError(null);
       const db = await getDb();
       const interactionId = uuid();
-      const isoDate = new Date(`${interactionForm.date}T00:00:00`).toISOString();
-      await db.execute("INSERT INTO interactions (id, person_id, date, type, notes) VALUES (?,?,?,?,?)", [
-        interactionId,
-        id,
-        isoDate,
-        interactionForm.type,
-        interactionForm.notes.trim() || null,
-      ]);
+      const isoDate = new Date(
+        `${interactionForm.date}T00:00:00`
+      ).toISOString();
+      await db.execute(
+        "INSERT INTO interactions (id, person_id, date, type, notes) VALUES (?,?,?,?,?)",
+        [
+          interactionId,
+          id,
+          isoDate,
+          interactionForm.type,
+          interactionForm.notes.trim() || null,
+        ]
+      );
       setInteractionForm({
         date: todayInputValue(),
         type: interactionForm.type,
@@ -228,7 +246,10 @@ export default function Person() {
     try {
       setError(null);
       const db = await getDb();
-      await db.execute("INSERT INTO person_notes (id, person_id, body) VALUES (?,?,?)", [uuid(), id, body]);
+      await db.execute(
+        "INSERT INTO person_notes (id, person_id, body) VALUES (?,?,?)",
+        [uuid(), id, body]
+      );
       setNoteDraft("");
       await load();
     } catch (e: any) {
@@ -254,7 +275,10 @@ export default function Person() {
     try {
       setError(null);
       const db = await getDb();
-      await db.execute("UPDATE person_notes SET body=?, updated_at=datetime('now') WHERE id=?", [body, editingId]);
+      await db.execute(
+        "UPDATE person_notes SET body=?, updated_at=datetime('now') WHERE id=?",
+        [body, editingId]
+      );
       cancelEdit();
       await load();
     } catch (e: any) {
@@ -282,104 +306,167 @@ export default function Person() {
     <PageLayout
       title={person?.name ?? "Person"}
       backLink={{ to: "/people", label: "People" }}
-      description={person?.context || "Log interactions, track reminders, and keep richer history."}
+      description={
+        person?.context ||
+        "Log interactions, track reminders, and keep richer history."
+      }
     >
       {error && <div className="text-sm text-red-600">{error}</div>}
 
+      {/* Metrics cards */}
       <div className="grid gap-6 md:grid-cols-3">
         <div className={`${sectionCardClass} space-y-1`}>
-          <p className="text-[14px] uppercase tracking-wide text-[#6B7280]">Last contacted</p>
-          <p className="text-[22px] font-semibold">
-            {metrics.lastContactDate ? formatDisplayDate(metrics.lastContactDate) : "—"}
+          <p className="text-[14px] uppercase tracking-wide text-muted-foreground">
+            Last contacted
           </p>
-          <p className="text-sm text-[#6B7280]">
-            {metrics.lastContactDate ? formatRelativeDays(metrics.daysSinceLast) : "No interactions yet"}
+          <p className="text-[22px] font-semibold text-foreground">
+            {metrics.lastContactDate
+              ? formatDisplayDate(metrics.lastContactDate)
+              : "—"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {metrics.lastContactDate
+              ? formatRelativeDays(metrics.daysSinceLast)
+              : "No interactions yet"}
           </p>
         </div>
         <div className={`${sectionCardClass} space-y-1`}>
-          <p className="text-[14px] uppercase tracking-wide text-[#6B7280]">Ideal frequency</p>
-          <p className="text-[22px] font-semibold">
+          <p className="text-[14px] uppercase tracking-wide text-muted-foreground">
+            Ideal frequency
+          </p>
+          <p className="text-[22px] font-semibold text-foreground">
             {person?.ideal_contact_frequency_days ?? "—"} days
           </p>
-          <p className="text-sm text-[#6B7280]">Update in the details form</p>
+          <p className="text-sm text-muted-foreground">
+            Update in the details form
+          </p>
         </div>
         <div className={`${sectionCardClass} space-y-1`}>
-          <p className="text-[14px] uppercase tracking-wide text-[#6B7280]">Next contact</p>
-          <p className="text-[22px] font-semibold">
-            {metrics.nextContactDate ? formatDisplayDate(metrics.nextContactDate) : "—"}
+          <p className="text-[14px] uppercase tracking-wide text-muted-foreground">
+            Next contact
           </p>
-          <p className={`text-sm ${metrics.isOverdue ? "text-red-600" : "text-[#6B7280]"}`}>
+          <p className="text-[22px] font-semibold text-foreground">
             {metrics.nextContactDate
-              ? metrics.daysUntilNext !== null && metrics.daysUntilNext < 0
-                ? `${Math.abs(metrics.daysUntilNext)} day${Math.abs(metrics.daysUntilNext) === 1 ? "" : "s"} overdue`
+              ? formatDisplayDate(metrics.nextContactDate)
+              : "—"}
+          </p>
+          <p
+            className={`text-sm ${
+              metrics.isOverdue ? "text-red-600" : "text-muted-foreground"
+            }`}
+          >
+            {metrics.nextContactDate
+              ? metrics.daysUntilNext !== null &&
+                metrics.daysUntilNext < 0
+                ? `${Math.abs(metrics.daysUntilNext)} day${
+                    Math.abs(metrics.daysUntilNext) === 1 ? "" : "s"
+                  } overdue`
                 : metrics.daysUntilNext === 0
-                  ? "Due today"
-                  : `in ${metrics.daysUntilNext} day${metrics.daysUntilNext === 1 ? "" : "s"}`
+                ? "Due today"
+                : `in ${metrics.daysUntilNext} day${
+                    metrics.daysUntilNext === 1 ? "" : "s"
+                  }`
               : "Log an interaction"}
           </p>
         </div>
       </div>
 
-      <form onSubmit={savePersonDetails} className={`${sectionCardClass} space-y-6`}>
+      {/* Person details */}
+      <form
+        onSubmit={savePersonDetails}
+        className={`${sectionCardClass} space-y-6`}
+      >
         <h2 className={sectionTitleClass}>Person details</h2>
         <div>
           <label className={labelClass}>Name</label>
-          <input
+          <Input
             value={personForm.name}
-            onChange={(e) => setPersonForm((prev) => ({ ...prev, name: e.target.value }))}
-            className={`${inputBaseClass} mt-2`}
+            onChange={(e) =>
+              setPersonForm((prev) => ({
+                ...prev,
+                name: e.target.value,
+              }))
+            }
+            className="mt-2"
           />
         </div>
         <div>
           <label className={labelClass}>Context</label>
-          <textarea
+          <Textarea
             value={personForm.context}
-            onChange={(e) => setPersonForm((prev) => ({ ...prev, context: e.target.value }))}
-            className={`${inputBaseClass} mt-2 min-h-[120px]`}
+            onChange={(e) =>
+              setPersonForm((prev) => ({
+                ...prev,
+                context: e.target.value,
+              }))
+            }
+            className="mt-2 min-h-[120px]"
           />
         </div>
         <div>
-          <label className={labelClass}>Ideal contact frequency (days)</label>
-          <input
+          <label className={labelClass}>
+            Ideal contact frequency (days)
+          </label>
+          <Input
             type="number"
             min={1}
             value={personForm.ideal_contact_frequency_days ?? ""}
             onChange={(e) =>
               setPersonForm((prev) => ({
                 ...prev,
-                ideal_contact_frequency_days: e.target.value ? Number(e.target.value) : null,
+                ideal_contact_frequency_days: e.target.value
+                  ? Number(e.target.value)
+                  : null,
               }))
             }
-            className={`${inputBaseClass} mt-2`}
+            className="mt-2"
           />
         </div>
         <div className="flex flex-wrap gap-3">
-          <button type="submit" className={primaryButtonClass} disabled={personSaving}>
+          <Button type="submit" disabled={personSaving}>
             {personSaving ? "Saving…" : "Save details"}
-          </button>
-          <button type="button" onClick={deletePerson} className={dangerButtonClass}>
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={deletePerson}
+          >
             Delete person
-          </button>
+          </Button>
         </div>
       </form>
 
-      <form onSubmit={addInteraction} className={`${sectionCardClass} space-y-6`}>
+      {/* Log interaction */}
+      <form
+        onSubmit={addInteraction}
+        className={`${sectionCardClass} space-y-6`}
+      >
         <h2 className={sectionTitleClass}>Log an interaction</h2>
         <div className="grid gap-6 md:grid-cols-2">
           <div>
             <label className={labelClass}>Date</label>
-            <input
+            <Input
               type="date"
               value={interactionForm.date}
-              onChange={(e) => setInteractionForm((prev) => ({ ...prev, date: e.target.value }))}
-              className={`${inputBaseClass} mt-2`}
+              onChange={(e) =>
+                setInteractionForm((prev) => ({
+                  ...prev,
+                  date: e.target.value,
+                }))
+              }
+              className="mt-2"
             />
           </div>
           <div>
             <label className={labelClass}>Type</label>
             <select
               value={interactionForm.type}
-              onChange={(e) => setInteractionForm((prev) => ({ ...prev, type: e.target.value }))}
+              onChange={(e) =>
+                setInteractionForm((prev) => ({
+                  ...prev,
+                  type: e.target.value,
+                }))
+              }
               className={`${inputBaseClass} mt-2`}
             >
               {interactionTypeOptions.map((opt) => (
@@ -392,100 +479,145 @@ export default function Person() {
         </div>
         <div>
           <label className={labelClass}>Notes</label>
-          <textarea
+          <Textarea
             value={interactionForm.notes}
-            onChange={(e) => setInteractionForm((prev) => ({ ...prev, notes: e.target.value }))}
-            className={`${inputBaseClass} mt-2 min-h-[120px]`}
+            onChange={(e) =>
+              setInteractionForm((prev) => ({
+                ...prev,
+                notes: e.target.value,
+              }))
+            }
+            className="mt-2 min-h-[120px]"
             placeholder="What did you talk about?"
           />
         </div>
         <div className="flex justify-end">
-          <button type="submit" className={primaryButtonClass} disabled={interactionSaving}>
+          <Button type="submit" disabled={interactionSaving}>
             {interactionSaving ? "Saving…" : "Add interaction"}
-          </button>
+          </Button>
         </div>
       </form>
 
+      {/* Interaction timeline */}
       <div className={`${sectionCardClass} space-y-4`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className={sectionTitleClass}>Interaction timeline</h2>
-          <p className="text-sm text-[#6B7280]">Newest first</p>
+          <p className="text-sm text-muted-foreground">Newest first</p>
         </div>
         <ul className="space-y-4">
           {interactions.map((i) => {
             const parsedDate = parseDateOrNull(i.date);
-            const typeLabel = interactionTypeOptions.find((opt) => opt.value === i.type)?.label ?? i.type ?? "Interaction";
+            const typeLabel =
+              interactionTypeOptions.find(
+                (opt) => opt.value === i.type
+              )?.label ?? i.type ?? "Interaction";
             const relative = relativeLabelForDate(i.date);
             return (
-              <li key={i.id} className="rounded-lg border border-[#E5E7EB] p-4">
-                <div className="flex flex-wrap justify-between gap-2 text-sm text-[#6B7280]">
-                  <span className="font-medium text-[#1A1A1A]">
+              <li
+                key={i.id}
+                className="rounded-lg border border-border bg-background p-4"
+              >
+                <div className="flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
                     {formatDisplayDate(parsedDate)} • {typeLabel}
                   </span>
                   {relative && <span>{relative}</span>}
                 </div>
-                {i.notes && <p className="mt-2 whitespace-pre-wrap text-base text-[#1A1A1A]">{i.notes}</p>}
+                {i.notes && (
+                  <p className="mt-2 whitespace-pre-wrap text-base text-foreground">
+                    {i.notes}
+                  </p>
+                )}
               </li>
             );
           })}
           {interactions.length === 0 && (
-            <li className="rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
-              No interactions yet. Add your first one above to start tracking your relationship.
+            <li className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              No interactions yet. Add your first one above to start tracking
+              your relationship.
             </li>
           )}
         </ul>
       </div>
-      
+
+      {/* Voice notes */}
       {id && <PersonVoiceNotes personId={id} />}
 
-
+      {/* Notes */}
       <div className={`${sectionCardClass} space-y-6`}>
         <h2 className={sectionTitleClass}>Notes</h2>
         <div className="space-y-3">
-          <textarea
+          <Textarea
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
             placeholder="Jot down a thought about this person…"
-            className={`${inputBaseClass} min-h-[120px]`}
+            className="min-h-[120px]"
           />
           <div className="flex justify-end">
-            <button type="button" onClick={addNote} className={primaryButtonClass} disabled={!noteDraft.trim()}>
+            <Button
+              type="button"
+              onClick={addNote}
+              disabled={!noteDraft.trim()}
+            >
               Save note
-            </button>
+            </Button>
           </div>
         </div>
 
         <ul className="space-y-4">
           {notes.map((note) => (
-            <li key={note.id} className="rounded-lg border border-[#E5E7EB] p-4">
+            <li
+              key={note.id}
+              className="rounded-lg border border-border bg-background p-4"
+            >
               {editingId === note.id ? (
                 <div className="space-y-3">
-                  <textarea
+                  <Textarea
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
-                    className={`${inputBaseClass} min-h-[120px]`}
+                    className="min-h-[120px]"
                   />
                   <div className="flex flex-wrap gap-3">
-                    <button type="button" onClick={saveEdit} className={primaryButtonClass} disabled={!editingText.trim()}>
+                    <Button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={!editingText.trim()}
+                    >
                       Save
-                    </button>
-                    <button type="button" onClick={cancelEdit} className={secondaryButtonClass}>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={cancelEdit}
+                    >
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="whitespace-pre-wrap text-base text-[#1A1A1A]">{note.body}</p>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#6B7280]">
+                  <p className="whitespace-pre-wrap text-base text-foreground">
+                    {note.body}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>Added {note.created_at}</span>
-                    {note.updated_at && <span>Updated {note.updated_at}</span>}
+                    {note.updated_at && (
+                      <span>Updated {note.updated_at}</span>
+                    )}
                   </div>
                   <div className="flex gap-4 text-sm font-medium">
-                    <button type="button" onClick={() => beginEdit(note)} className="text-[#3A6FF8]">
+                    <button
+                      type="button"
+                      onClick={() => beginEdit(note)}
+                      className="text-primary"
+                    >
                       Edit
                     </button>
-                    <button type="button" onClick={() => deleteNote(note.id)} className="text-red-600">
+                    <button
+                      type="button"
+                      onClick={() => deleteNote(note.id)}
+                      className="text-red-600"
+                    >
                       Delete
                     </button>
                   </div>
@@ -494,7 +626,7 @@ export default function Person() {
             </li>
           ))}
           {notes.length === 0 && (
-            <li className="rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
+            <li className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground">
               No notes yet. Use the box above to capture something memorable.
             </li>
           )}

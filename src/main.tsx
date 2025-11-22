@@ -39,8 +39,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    // if your Person links use /people/:id, use this:
-    path: "/people/:id",
+    path: "/person/:id",        // 👈 important: use /person/:id here
     element: (
       <RequireAuth>
         <Person />
@@ -56,6 +55,7 @@ const router = createBrowserRouter([
     ),
   },
 ]);
+
 
 const qc = new QueryClient();
 

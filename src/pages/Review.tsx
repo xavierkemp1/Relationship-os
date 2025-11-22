@@ -1,7 +1,14 @@
+// src/pages/Review.tsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDb } from "../lib/db";
-import PageLayout, { sectionCardClass, sectionTitleClass } from "../components/PageLayout";
+import PageLayout, {
+  sectionCardClass,
+  sectionTitleClass,
+} from "../components/PageLayout";
+import { Button } from "@/components/ui/button";
+import { formatDisplayDate } from "../lib/contactDates";
+
 type Row = {
   id: string;
   name: string;
@@ -11,9 +18,6 @@ type Row = {
   recency: number | null;
   score: number;
 };
-
-const secondaryButtonClass =
-  "inline-flex items-center justify-center rounded-md border border-[#E5E7EB] px-3 py-1.5 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#3A6FF8] hover:text-[#3A6FF8]";
 
 export default function Review() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -31,12 +35,16 @@ export default function Review() {
       const now = Date.now();
       const scored = people
         .map((p: any) => {
-          const lastMs = typeof p.last === "string" ? Date.parse(p.last) : NaN;
+          const lastMs =
+            typeof p.last === "string" ? Date.parse(p.last) : NaN;
           const hasValidLast = Number.isFinite(lastMs);
-          const daysSince = hasValidLast ? Math.max(0, Math.round((now - lastMs) / 86_400_000)) : null;
+          const daysSince = hasValidLast
+            ? Math.max(0, Math.round((now - lastMs) / 86_400_000))
+            : null;
           const recency = daysSince === null ? null : Math.min(60, daysSince);
           const recencyForScore = recency ?? 60;
-          const score = p.importance * 10 + recencyForScore + p.open_loops * 15;
+          const score =
+            p.importance * 10 + recencyForScore + p.open_loops * 15;
           return {
             id: p.id,
             name: p.name,
@@ -54,6 +62,24 @@ export default function Review() {
     })();
   }, []);
 
+  const formatLast = (last: string | null) => {
+    if (!last) return "No interactions yet";
+    const d = new Date(last);
+    if (Number.isNaN(d.getTime())) return "Last: —";
+    return `Last: ${formatDisplayDate(d)}`;
+  };
+
+  const formatOpenLoops = (count: number) => {
+    if (count === 0) return "No open loops";
+    if (count === 1) return "1 open loop";
+    return `${count} open loops`;
+  };
+
+  const formatRecency = (recency: number | null) => {
+    if (recency === null) return "Recency: —";
+    return `Recency: ${recency}d`;
+  };
+
   return (
     <PageLayout
       title="Weekly review"
@@ -62,22 +88,31 @@ export default function Review() {
     >
       <div className={sectionCardClass}>
         <h2 className={sectionTitleClass}>Top priorities</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Based on importance, recency, and open loops.
+        </p>
         <ul className="mt-4 space-y-3">
           {rows.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] p-4">
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/80 p-4"
+            >
               <div>
-                <p className="text-[16px] font-semibold text-[#1A1A1A]">{r.name}</p>
-                <p className="text-sm text-[#6B7280]">
-                  {r.last ? `Last: ${r.last}` : "No interactions yet"} • {r.open_loops} open loops • {r.recency !== null ? `${r.recency}d` : "—"}
+                <p className="text-[16px] font-semibold text-foreground">
+                  {r.name}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {formatLast(r.last)} • {formatOpenLoops(r.open_loops)} •{" "}
+                  {formatRecency(r.recency)}
                 </p>
               </div>
-              <Link to={`/person/${r.id}`} className={secondaryButtonClass}>
-                Open
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/person/${r.id}`}>Open</Link>
+              </Button>
             </li>
           ))}
           {rows.length === 0 && (
-            <li className="rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
+            <li className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground">
               Loading review data…
             </li>
           )}

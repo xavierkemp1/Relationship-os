@@ -26,7 +26,7 @@ export async function uploadVoiceNote(personId: string, blob: Blob): Promise<Voi
 
   // 1) upload file to Storage
   const { error: uploadError } = await supabase.storage
-    .from("voice-notes")
+    .from("Voice-notes")
     .upload(storagePath, blob, {
       contentType: "audio/webm",
       upsert: false,
@@ -55,7 +55,7 @@ export async function uploadVoiceNote(personId: string, blob: Blob): Promise<Voi
 
   // 3) create a signed URL for playback
   const { data: signed, error: signedError } = await supabase.storage
-    .from("voice-notes")
+    .from("Voice-notes")
     .createSignedUrl(storagePath, 60 * 60); // valid 1h
 
   if (signedError || !signed) {
@@ -92,7 +92,7 @@ export async function listVoiceNotes(personId: string): Promise<VoiceNote[]> {
 
   for (const row of data) {
     const { data: signed, error: signedError } = await supabase.storage
-      .from("voice-notes")
+      .from("Voice-notes")
       .createSignedUrl(row.storage_path, 60 * 60);
 
     if (signedError || !signed) {
@@ -131,7 +131,7 @@ export async function deleteVoiceNote(note: VoiceNote): Promise<void> {
 
   // delete file from Storage (non-fatal if this fails)
   const { error: deleteFileError } = await supabase.storage
-    .from("voice-notes")
+    .from("Voice-notes")
     .remove([note.storage_path]);
 
   if (deleteFileError) {

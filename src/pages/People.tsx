@@ -1,3 +1,4 @@
+// src/pages/People.tsx
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
@@ -21,6 +22,8 @@ import PageLayout, {
   sectionCardClass,
   sectionTitleClass,
 } from "../components/PageLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Person = {
   id: string;
@@ -32,11 +35,6 @@ type Person = {
 };
 
 type SortMode = "name" | "last_contact" | "next_contact" | "overdue";
-
-const primaryButtonClass =
-  "inline-flex items-center justify-center rounded-md bg-[#3A6FF8] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#315cce] disabled:opacity-60";
-const secondaryButtonClass =
-  "inline-flex items-center justify-center rounded-md border border-[#E5E7EB] px-4 py-2.5 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#3A6FF8] hover:text-[#3A6FF8]";
 
 export default function People() {
   const [name, setName] = useState("");
@@ -90,7 +88,10 @@ export default function People() {
       const trimmed = name.trim();
       if (!trimmed) return;
       const db = await getDb();
-      await db.execute("INSERT INTO people (id, name) VALUES (?, ?)", [uuid(), trimmed]);
+      await db.execute("INSERT INTO people (id, name) VALUES (?, ?)", [
+        uuid(),
+        trimmed,
+      ]);
       setName("");
       await load();
     } catch (e: any) {
@@ -119,15 +120,21 @@ export default function People() {
           return bTime - aTime;
         }
         if (sortMode === "next_contact") {
-          const aVal = a.metrics.nextContactDate?.getTime() ?? Number.POSITIVE_INFINITY;
-          const bVal = b.metrics.nextContactDate?.getTime() ?? Number.POSITIVE_INFINITY;
+          const aVal =
+            a.metrics.nextContactDate?.getTime() ??
+            Number.POSITIVE_INFINITY;
+          const bVal =
+            b.metrics.nextContactDate?.getTime() ??
+            Number.POSITIVE_INFINITY;
           return aVal - bVal;
         }
         if (a.metrics.isOverdue !== b.metrics.isOverdue) {
           return a.metrics.isOverdue ? -1 : 1;
         }
-        const aDelta = a.metrics.daysUntilNext ?? Number.POSITIVE_INFINITY;
-        const bDelta = b.metrics.daysUntilNext ?? Number.POSITIVE_INFINITY;
+        const aDelta =
+          a.metrics.daysUntilNext ?? Number.POSITIVE_INFINITY;
+        const bDelta =
+          b.metrics.daysUntilNext ?? Number.POSITIVE_INFINITY;
         return aDelta - bDelta;
       });
   }, [people, showOverdueOnly, sortMode]);
@@ -137,34 +144,40 @@ export default function People() {
       title="People"
       description="Keep everyone in one place, monitor contact cadence, and open a profile when it’s time to reconnect."
       actions={
-        <Link to="/review" className={`${secondaryButtonClass} gap-2`}>
-          <span>Weekly review</span>
-          <ArrowUpRight className="h-4 w-4" aria-hidden />
-        </Link>
+        <Button asChild variant="outline" className="gap-2 text-sm">
+          <Link to="/review">
+            <span>Weekly review</span>
+            <ArrowUpRight className="ml-1 h-4 w-4" aria-hidden />
+          </Link>
+        </Button>
       }
     >
+      {/* Add person */}
       <form onSubmit={add} className={`${sectionCardClass} space-y-4`}>
         <div>
           <label className={labelClass}>Add someone</label>
-          <input
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
-            className={`${inputBaseClass} mt-2`}
+            className="mt-2"
           />
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-[#6B7280]">Add a name to start tracking interactions and reminders.</p>
-          <button type="submit" className={`${primaryButtonClass} gap-2`}>
+          <p className="text-sm text-muted-foreground">
+            Add a name to start tracking interactions and reminders.
+          </p>
+          <Button type="submit" className="gap-2" size="sm">
             <UserPlus className="h-4 w-4" aria-hidden />
             Add person
-          </button>
+          </Button>
         </div>
       </form>
 
+      {/* Filters */}
       <div className={`${sectionCardClass} space-y-4`}>
         <h2 className={`${sectionTitleClass} flex items-center gap-2`}>
-          <Filter className="h-5 w-5 text-[#3A6FF8]" aria-hidden />
+          <Filter className="h-5 w-5 text-primary" aria-hidden />
           Sort & filters
         </h2>
         <div className="flex flex-col gap-4 md:flex-row md:items-end">
@@ -181,10 +194,10 @@ export default function People() {
               <option value="overdue">Overdue first</option>
             </select>
           </div>
-          <label className="flex items-center gap-3 text-base text-[#1A1A1A]">
+          <label className="flex items-center gap-3 text-sm text-foreground">
             <input
               type="checkbox"
-              className="h-5 w-5 rounded border-[#E5E7EB] text-[#3A6FF8] focus:ring-[#3A6FF8]"
+              className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
               checked={showOverdueOnly}
               onChange={(e) => setShowOverdueOnly(e.target.checked)}
             />
@@ -192,25 +205,38 @@ export default function People() {
           </label>
         </div>
         {err && <div className="text-sm text-red-600">Error: {err}</div>}
-        {loading && <div className="text-sm text-[#6B7280]">Loading…</div>}
+        {loading && (
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        )}
       </div>
 
+      {/* People list */}
       <div className={`${sectionCardClass} space-y-4`}>
         <h2 className={sectionTitleClass}>People list</h2>
-        <p className="text-sm text-[#6B7280]">
-          Profiles now display last and next contact details with richer spacing so you can scan the state of your relationships at a glance.
+        <p className="text-sm text-muted-foreground">
+          Profiles display last and next contact details so you can scan the
+          state of your relationships at a glance.
         </p>
         <div className="mt-2 space-y-4">
           {decorated.map((p) => (
-            <div key={p.id} className="rounded-2xl border border-[#E5E7EB] bg-white/80 p-5 shadow-sm shadow-[#0F172A]/5">
+            <div
+              key={p.id}
+              className="rounded-2xl border border-border bg-card/80 p-5 shadow-sm"
+            >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF2FF] text-lg font-semibold text-[#3A6FF8]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
                     {p.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="text-[18px] font-semibold text-[#1A1A1A]">{p.name}</div>
-                    {p.context && <p className="text-sm text-[#6B7280]">{p.context}</p>}
+                    <div className="text-[18px] font-semibold text-foreground">
+                      {p.name}
+                    </div>
+                    {p.context && (
+                      <p className="text-sm text-muted-foreground">
+                        {p.context}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {p.metrics.isOverdue && (
@@ -220,55 +246,86 @@ export default function People() {
                   </span>
                 )}
               </div>
+
               <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-                    <Clock3 className="h-4 w-4 text-[#3A6FF8]" aria-hidden />
+                {/* Last contact */}
+                <div className="rounded-xl border border-border bg-muted/50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Clock3
+                      className="h-4 w-4 text-primary"
+                      aria-hidden
+                    />
                     Last contact
                   </div>
-                  <div className="mt-2 text-[16px] font-medium text-[#1A1A1A]">
-                    {p.metrics.lastContactDate ? formatDisplayDate(p.metrics.lastContactDate) : "No interactions yet"}
+                  <div className="mt-2 text-[16px] font-medium text-foreground">
+                    {p.metrics.lastContactDate
+                      ? formatDisplayDate(p.metrics.lastContactDate)
+                      : "No interactions yet"}
                   </div>
-                  <div className="text-sm text-[#6B7280]">
-                    {p.metrics.lastContactDate ? formatRelativeDays(p.metrics.daysSinceLast) : "Log the first touchpoint"}
+                  <div className="text-sm text-muted-foreground">
+                    {p.metrics.lastContactDate
+                      ? formatRelativeDays(p.metrics.daysSinceLast)
+                      : "Log the first touchpoint"}
                   </div>
                 </div>
-                <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-                    <CalendarDays className="h-4 w-4 text-[#3A6FF8]" aria-hidden />
+
+                {/* Next contact */}
+                <div className="rounded-xl border border-border bg-muted/50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <CalendarDays
+                      className="h-4 w-4 text-primary"
+                      aria-hidden
+                    />
                     Next contact
                   </div>
-                  <div className="mt-2 text-[16px] font-medium text-[#1A1A1A]">
-                    {p.metrics.nextContactDate ? formatDisplayDate(p.metrics.nextContactDate) : "Add a plan"}
+                  <div className="mt-2 text-[16px] font-medium text-foreground">
+                    {p.metrics.nextContactDate
+                      ? formatDisplayDate(p.metrics.nextContactDate)
+                      : "Add a plan"}
                   </div>
-                  <div className="text-sm text-[#6B7280]">
+                  <div className="text-sm text-muted-foreground">
                     {p.metrics.daysUntilNext !== null
                       ? p.metrics.daysUntilNext < 0
-                        ? `${Math.abs(p.metrics.daysUntilNext)} day${Math.abs(p.metrics.daysUntilNext) === 1 ? "" : "s"} overdue`
+                        ? `${Math.abs(
+                            p.metrics.daysUntilNext
+                          )} day${
+                            Math.abs(p.metrics.daysUntilNext) === 1
+                              ? ""
+                              : "s"
+                          } overdue`
                         : p.metrics.daysUntilNext === 0
-                          ? "Due today"
-                          : `in ${p.metrics.daysUntilNext} day${p.metrics.daysUntilNext === 1 ? "" : "s"}`
+                        ? "Due today"
+                        : `in ${p.metrics.daysUntilNext} day${
+                            p.metrics.daysUntilNext === 1 ? "" : "s"
+                          }`
                       : ""}
                   </div>
                 </div>
-                <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-white p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Actions</div>
-                  <p className="mt-2 text-sm text-[#6B7280]">
-                    Jump into the profile to log interactions, update context, and capture commitments.
+
+                {/* Actions */}
+                <div className="rounded-xl border border-dashed border-border bg-background p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Actions
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Jump into the profile to log interactions, update context,
+                    and capture commitments.
                   </p>
-                  <button
-                    className={`${secondaryButtonClass} mt-4 w-full gap-2`}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-4 w-full justify-between"
                     onClick={() => navigate(`/person/${p.id}`)}
                   >
                     Open person
                     <ArrowUpRight className="h-4 w-4" aria-hidden />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
           ))}
           {decorated.length === 0 && !loading && (
-            <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F9FAFB] p-6 text-center text-sm text-[#6B7280]">
+            <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-6 text-center text-sm text-muted-foreground">
               No people match the current filters.
             </div>
           )}
