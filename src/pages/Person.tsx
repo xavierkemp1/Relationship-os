@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { v4 as uuid } from "uuid";
 import { getDb } from "../lib/db";
 import { PersonVoiceNotes } from "../components/PersonVoiceNotes";
+import { createInteractionWithAI } from "../lib/interactions";
+import { supabase } from "../lib/supabaseClient";
 
 import {
   calculateScheduleFromInteractions,
   formatDisplayDate,
   formatRelativeDays,
 } from "../lib/contactDates";
+import { InteractionCard } from "../components/InteractionCard";
 import PageLayout, {
   inputBaseClass,
   labelClass,
@@ -64,6 +67,17 @@ type PersonNoteRow = {
   updated_at: string | null;
 };
 type Interaction = InteractionRow;
+type AiInteraction = {
+  id: string;
+  happened_at: string;
+  raw_text: string;
+  summary: string | null;
+  sentiment: "positive" | "neutral" | "negative" | null;
+  ai_next_steps: {
+    follow_up_ideas?: string[];
+    things_to_remember?: string[];
+  } | null;
+};
 
 type PersonFormState = {
   name: string;
@@ -100,6 +114,11 @@ export default function Person() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [aiNote, setAiNote] = useState("");
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiInteractions, setAiInteractions] = useState<AiInteraction[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const load = async () => {
     if (!id) return;
@@ -142,8 +161,33 @@ export default function Person() {
     }
   };
 
+  const loadAiInteractions = async () => {
+    if (!id) return;
+    try {
+      setAiLoading(true);
+      setAiError(null);
+      const { data, error: loadError } = await supabase
+        .from("interactions")
+        .select("*")
+        .eq("person_id", id)
+        .order("happened_at", { ascending: false });
+
+      if (loadError) {
+        throw loadError;
+      }
+
+      setAiInteractions((data as AiInteraction[]) ?? []);
+    } catch (e: any) {
+      console.error("Load AI interactions failed", e);
+      setAiError(e?.message ?? "Failed to load AI interactions");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
+    loadAiInteractions();
   }, [id]);
 
   const metrics = useMemo(
@@ -200,6 +244,27 @@ export default function Person() {
     } catch (e: any) {
       console.error("Delete person failed", e);
       setError(e?.message ?? "Failed to delete person");
+    }
+  };
+
+  const addAiInteraction = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!id) return;
+    const trimmed = aiNote.trim();
+    if (!trimmed || aiSaving) return;
+    try {
+      setAiSaving(true);
+      setAiError(null);
+      const newInteraction = await createInteractionWithAI(id, trimmed);
+      setAiNote("");
+      setAiInteractions((prev) => [newInteraction as AiInteraction, ...prev]);
+    } catch (e: any) {
+      console.error("Add AI interaction failed", e);
+      setAiError(
+        e?.message ?? "Failed to add interaction (are you signed in?)"
+      );
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -368,6 +433,60 @@ export default function Person() {
                   }`
               : "Log an interaction"}
           </p>
+        </div>
+      </div>
+
+      {/* AI-powered interactions */}
+      <div className={`${sectionCardClass} space-y-6`}>
+        <div className="space-y-1">
+          <h2 className={sectionTitleClass}>AI-powered interactions</h2>
+          <p className="text-sm text-muted-foreground">
+            Save a quick note and automatically get summaries, sentiment, and
+            suggested next steps.
+          </p>
+        </div>
+
+        <form onSubmit={addAiInteraction} className="space-y-3">
+          <div>
+            <label className={labelClass}>New interaction note</label>
+            <Textarea
+              value={aiNote}
+              onChange={(e) => setAiNote(e.target.value)}
+              placeholder="Had coffee with them, they mentioned their new project and seemed stressed about deadlines…"
+              className="mt-2 min-h-[120px]"
+            />
+          </div>
+          {aiError && <p className="text-sm text-red-600">{aiError}</p>}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={!aiNote.trim() || aiSaving}>
+              {aiSaving ? "Saving + getting insights…" : "Save interaction"}
+            </Button>
+          </div>
+        </form>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-foreground">
+              Recent interactions
+            </h3>
+            {aiLoading && (
+              <span className="text-sm text-muted-foreground">Loading…</span>
+            )}
+          </div>
+          {aiInteractions.length === 0 && !aiLoading ? (
+            <p className="text-sm text-muted-foreground">
+              No interactions yet. Add a note above to generate AI insights.
+            </p>
+          ) : (
+            <div className="grid gap-3">
+              {aiInteractions.map((interaction) => (
+                <InteractionCard
+                  key={interaction.id}
+                  interaction={interaction}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
