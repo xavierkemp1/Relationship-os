@@ -21,7 +21,7 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini", // or your exact model ID
+      model: "gpt-4.1-mini", // or your exact model ID
       response_format: { type: "json_object" },
       messages: [
         {
